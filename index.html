@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>k_anglictine · Advent (test)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Mulish:wght@400;500;700;800;900&display=swap">
+<style>
+:root {
+  --paper: #f2f2f2;
+  --ink: #111318;
+  --mute: #4a505c;
+  --hair: #c6c6c6;
+  --blue: #cde7ff;
+  --pink: #ffd6d6;
+  --good: #dbefe1;
+  --bad: #ffd6d6;
+  --sans: 'Mulish', 'Avenir Next', 'Helvetica Neue', Arial, sans-serif;
+  --serif: 'Instrument Serif', 'Times New Roman', serif;
+  color-scheme: light;
+}
+:root { --yellow: #fff7d9; }
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body { background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 16px; line-height: 1.45; -webkit-text-size-adjust: 100%; }
+.blob { position: fixed; z-index: -1; pointer-events: none; filter: blur(14px); }
+.blob.a { width: 420px; right: -150px; top: -60px; transform: rotate(-16deg); }
+.blob.b { width: 360px; left: -160px; bottom: -110px; transform: rotate(22deg); }
+.wrap { max-width: 520px; margin: 0 auto; padding: 20px 20px 48px; }
+.top { display: flex; align-items: center; gap: 9px; height: 32px; margin-bottom: 28px; }
+.top svg { width: 20px; height: auto; }
+.top b { font-weight: 800; letter-spacing: -0.02em; font-size: 15px; }
+.top .tag { margin-left: auto; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+h1 { margin: 0; font-size: 34px; line-height: 1.02; font-weight: 800; letter-spacing: -0.04em; }
+h1 em { font-family: var(--serif); font-style: italic; font-weight: 400; letter-spacing: 0; font-size: 1.12em; }
+.lead { margin: 12px 0 22px; color: var(--mute); max-width: 38ch; }
+.label { margin: 0 0 8px; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 50px; padding: 12px 26px; border-radius: 999px; border: 1px solid var(--ink); background: transparent; font-weight: 800; font-size: 16px; letter-spacing: -0.01em; }
+.btn.primary { background: var(--ink); color: var(--paper); }
+.btn.block { width: 100%; }
+.btn[disabled] { opacity: .4; cursor: default; }
+.field input { width: 100%; min-height: 52px; padding: 10px 14px; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; border: 1.5px solid var(--ink); border-radius: 12px; background: #fff; }
+.field input.ok { background: var(--good); }
+.field input.bad { background: var(--bad); }
+.small { font-size: 13px; color: var(--mute); margin: 8px 0 18px; }
+.err { color: var(--ink); background: var(--bad); border-radius: 10px; padding: 8px 12px; font-size: 14px; margin: 0 0 14px; }
+.bar { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+.bar .count { font-size: 12px; font-weight: 800; letter-spacing: .08em; }
+.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
+.door { aspect-ratio: 1; border-radius: 16px; border: 1.5px solid var(--ink); background: rgba(255,255,255,.6); font-size: 26px; font-weight: 900; letter-spacing: -0.04em; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; }
+.door small { font-size: 11px; font-weight: 800; letter-spacing: .06em; margin-top: 5px; }
+.door.done { background: var(--good); }
+.door.today { background: var(--blue); }
+.door.missed { background: var(--yellow); }
+.door.locked { border: 1.5px dashed var(--hair); color: var(--mute); background: transparent; opacity: .7; cursor: default; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12px; color: var(--mute); margin-bottom: 18px; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 4px; border: 1px solid var(--ink); margin-right: 6px; vertical-align: -1px; }
+.card { padding: 22px 20px; background: #fff; border: 1px solid var(--hair); border-radius: 20px; margin-bottom: 14px; }
+.card .big { font-size: 30px; line-height: 1.1; font-weight: 900; letter-spacing: -0.04em; margin: 6px 0 0; overflow-wrap: anywhere; }
+.card .q { font-size: 15px; color: var(--mute); }
+.opts { display: grid; gap: 8px; margin-bottom: 14px; }
+.opt { min-height: 54px; padding: 12px 16px; text-align: left; font-size: 18px; font-weight: 800; letter-spacing: -0.02em; border: 1.5px solid var(--ink); border-radius: 14px; background: #fff; }
+.opt.ok { background: var(--good); }
+.opt.ok::after { content: "✓"; float: right; font-weight: 800; }
+.opt.bad { background: var(--bad); }
+.opt.bad::after { content: "✕"; float: right; font-weight: 800; }
+.opt[disabled] { cursor: default; }
+.msg { margin: 0 0 14px; font-size: 15px; }
+.msg.ok { background: var(--good); padding: 10px 14px; border-radius: 12px; }
+.msg.hint { background: var(--yellow); padding: 10px 14px; border-radius: 12px; }
+.back { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 6px 0; margin-bottom: 14px; font-weight: 800; font-size: 14px; }
+.diploma { border: 1.5px solid var(--ink); border-radius: 22px; padding: 26px 22px; background: #fff; text-align: center; margin-bottom: 14px; }
+.diploma .nick { font-size: 30px; font-weight: 900; letter-spacing: -0.04em; margin: 8px 0; overflow-wrap: anywhere; }
+.diploma .serif { font-family: var(--serif); font-style: italic; font-size: 26px; }
+.code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 17px; font-weight: 700; padding: 10px 12px; background: var(--blue); border-radius: 12px; display: inline-block; margin: 8px 0; word-break: break-all; }
+.steps { margin: 0 0 16px; padding-left: 20px; }
+.steps li { margin: 4px 0; }
+.foot { margin-top: 26px; font-size: 12px; color: var(--mute); display: flex; gap: 14px; flex-wrap: wrap; }
+.link { background: none; border: 0; padding: 0; text-decoration: underline; font-size: 12px; color: var(--mute); }
+@media (max-width: 380px) { h1 { font-size: 30px; } .door { font-size: 22px; } }
+@media (prefers-reduced-motion: no-preference) { .door:not(.locked):hover { transform: translateY(-1px); } }
+</style>
+</head>
+<body>
+<svg class="blob a" aria-hidden="true" viewBox="0 0 320.0 303.0"><path d="M106.8,4.0 L95.0,12.5 L88.5,20.0 L82.0,29.8 L75.0,46.0 L71.0,61.2 L71.0,63.5 L70.0,66.2 L70.0,69.5 L69.0,72.2 L69.0,77.5 L68.0,80.2 L68.0,87.5 L67.0,90.2 L67.0,98.5 L66.0,101.2 L66.0,108.5 L65.0,111.2 L65.0,117.5 L64.0,120.2 L64.0,123.5 L63.0,126.2 L61.0,138.5 L59.2,143.2 L58.8,146.5 L52.5,164.0 L39.0,193.0 L37.0,195.8 L27.0,215.0 L11.0,240.8 L3.0,257.0 L0.0,267.2 L0.0,280.5 L4.0,290.0 L6.5,293.8 L10.0,297.2 L13.0,299.2 L22.2,301.8 L26.5,301.8 L29.2,300.8 L33.5,300.5 L42.8,296.2 L50.2,288.8 L52.8,285.0 L57.8,273.8 L60.8,263.5 L60.8,261.2 L62.8,253.5 L63.0,246.5 L64.5,244.2 L64.8,241.2 L67.8,231.0 L72.8,220.8 L81.0,212.2 L84.8,210.2 L89.2,208.8 L100.5,208.8 L114.0,213.2 L121.0,216.8 L132.8,224.2 L145.2,234.5 L175.5,265.0 L179.8,268.2 L188.0,276.2 L197.0,283.2 L206.8,289.8 L217.8,295.2 L230.2,299.5 L240.2,301.8 L244.5,301.8 L247.2,302.8 L261.5,302.8 L264.2,301.8 L267.5,301.8 L276.5,299.5 L283.0,297.2 L290.0,293.8 L301.8,285.2 L309.2,276.8 L311.8,273.0 L316.2,264.0 L319.8,252.5 L319.8,238.2 L318.8,235.5 L318.5,232.2 L315.2,222.8 L312.8,217.8 L306.2,209.0 L297.0,202.0 L284.5,197.2 L280.2,197.0 L277.5,196.0 L250.2,196.0 L247.5,197.0 L241.2,197.0 L238.5,198.0 L234.2,198.0 L231.5,199.0 L227.2,199.0 L218.5,201.0 L214.2,201.0 L211.5,202.0 L208.2,202.0 L205.5,203.0 L201.2,203.0 L198.5,204.0 L193.2,204.0 L190.5,205.0 L180.2,205.0 L177.5,206.0 L165.2,206.0 L162.5,205.0 L154.2,205.0 L151.5,204.0 L147.2,204.0 L144.5,203.0 L141.2,203.0 L128.2,199.8 L117.0,196.0 L108.8,192.0 L105.0,189.5 L102.8,187.0 L101.8,184.5 L102.2,179.8 L106.2,173.0 L114.0,165.2 L124.0,157.2 L138.8,147.8 L160.8,137.2 L178.0,130.2 L197.0,120.8 L211.8,111.2 L223.8,102.2 L236.0,91.2 L243.8,81.0 L247.8,70.5 L247.8,63.2 L245.2,55.8 L243.2,52.0 L237.8,46.5 L233.5,45.0 L230.0,44.8 L221.2,45.0 L216.2,46.2 L201.8,53.0 L187.0,62.5 L174.0,72.5 L161.0,83.5 L141.8,101.5 L138.5,105.8 L129.8,114.5 L119.5,126.8 L113.5,133.0 L108.5,139.8 L95.5,155.0 L86.5,167.8 L77.8,176.5 L74.0,178.5 L70.2,179.0 L67.0,177.5 L63.2,173.8 L61.8,169.5 L61.8,165.2 L62.8,162.5 L62.8,160.2 L64.2,155.8 L69.8,144.8 L76.2,135.0 L88.2,119.8 L103.2,99.0 L137.2,55.8 L144.2,44.8 L147.8,36.5 L148.8,30.2 L149.8,27.5 L149.8,24.2 L148.8,21.5 L148.8,19.2 L145.8,11.8 L143.2,8.0 L140.8,5.5 L136.0,2.5 L126.5,0.0 L120.2,0.0 L117.5,1.0 L115.2,1.0Z" fill="#cde7ff" fill-opacity=".9"/></svg>
+<svg class="blob b" aria-hidden="true" viewBox="0 0 320.0 303.0"><path d="M106.8,4.0 L95.0,12.5 L88.5,20.0 L82.0,29.8 L75.0,46.0 L71.0,61.2 L71.0,63.5 L70.0,66.2 L70.0,69.5 L69.0,72.2 L69.0,77.5 L68.0,80.2 L68.0,87.5 L67.0,90.2 L67.0,98.5 L66.0,101.2 L66.0,108.5 L65.0,111.2 L65.0,117.5 L64.0,120.2 L64.0,123.5 L63.0,126.2 L61.0,138.5 L59.2,143.2 L58.8,146.5 L52.5,164.0 L39.0,193.0 L37.0,195.8 L27.0,215.0 L11.0,240.8 L3.0,257.0 L0.0,267.2 L0.0,280.5 L4.0,290.0 L6.5,293.8 L10.0,297.2 L13.0,299.2 L22.2,301.8 L26.5,301.8 L29.2,300.8 L33.5,300.5 L42.8,296.2 L50.2,288.8 L52.8,285.0 L57.8,273.8 L60.8,263.5 L60.8,261.2 L62.8,253.5 L63.0,246.5 L64.5,244.2 L64.8,241.2 L67.8,231.0 L72.8,220.8 L81.0,212.2 L84.8,210.2 L89.2,208.8 L100.5,208.8 L114.0,213.2 L121.0,216.8 L132.8,224.2 L145.2,234.5 L175.5,265.0 L179.8,268.2 L188.0,276.2 L197.0,283.2 L206.8,289.8 L217.8,295.2 L230.2,299.5 L240.2,301.8 L244.5,301.8 L247.2,302.8 L261.5,302.8 L264.2,301.8 L267.5,301.8 L276.5,299.5 L283.0,297.2 L290.0,293.8 L301.8,285.2 L309.2,276.8 L311.8,273.0 L316.2,264.0 L319.8,252.5 L319.8,238.2 L318.8,235.5 L318.5,232.2 L315.2,222.8 L312.8,217.8 L306.2,209.0 L297.0,202.0 L284.5,197.2 L280.2,197.0 L277.5,196.0 L250.2,196.0 L247.5,197.0 L241.2,197.0 L238.5,198.0 L234.2,198.0 L231.5,199.0 L227.2,199.0 L218.5,201.0 L214.2,201.0 L211.5,202.0 L208.2,202.0 L205.5,203.0 L201.2,203.0 L198.5,204.0 L193.2,204.0 L190.5,205.0 L180.2,205.0 L177.5,206.0 L165.2,206.0 L162.5,205.0 L154.2,205.0 L151.5,204.0 L147.2,204.0 L144.5,203.0 L141.2,203.0 L128.2,199.8 L117.0,196.0 L108.8,192.0 L105.0,189.5 L102.8,187.0 L101.8,184.5 L102.2,179.8 L106.2,173.0 L114.0,165.2 L124.0,157.2 L138.8,147.8 L160.8,137.2 L178.0,130.2 L197.0,120.8 L211.8,111.2 L223.8,102.2 L236.0,91.2 L243.8,81.0 L247.8,70.5 L247.8,63.2 L245.2,55.8 L243.2,52.0 L237.8,46.5 L233.5,45.0 L230.0,44.8 L221.2,45.0 L216.2,46.2 L201.8,53.0 L187.0,62.5 L174.0,72.5 L161.0,83.5 L141.8,101.5 L138.5,105.8 L129.8,114.5 L119.5,126.8 L113.5,133.0 L108.5,139.8 L95.5,155.0 L86.5,167.8 L77.8,176.5 L74.0,178.5 L70.2,179.0 L67.0,177.5 L63.2,173.8 L61.8,169.5 L61.8,165.2 L62.8,162.5 L62.8,160.2 L64.2,155.8 L69.8,144.8 L76.2,135.0 L88.2,119.8 L103.2,99.0 L137.2,55.8 L144.2,44.8 L147.8,36.5 L148.8,30.2 L149.8,27.5 L149.8,24.2 L148.8,21.5 L148.8,19.2 L145.8,11.8 L143.2,8.0 L140.8,5.5 L136.0,2.5 L126.5,0.0 L120.2,0.0 L117.5,1.0 L115.2,1.0Z" fill="#ffd6d6" fill-opacity=".9"/></svg>
+<div class="wrap">
+  <div class="top">
+    <svg aria-hidden="true" viewBox="0 0 320.0 303.0"><path d="M106.8,4.0 L95.0,12.5 L88.5,20.0 L82.0,29.8 L75.0,46.0 L71.0,61.2 L71.0,63.5 L70.0,66.2 L70.0,69.5 L69.0,72.2 L69.0,77.5 L68.0,80.2 L68.0,87.5 L67.0,90.2 L67.0,98.5 L66.0,101.2 L66.0,108.5 L65.0,111.2 L65.0,117.5 L64.0,120.2 L64.0,123.5 L63.0,126.2 L61.0,138.5 L59.2,143.2 L58.8,146.5 L52.5,164.0 L39.0,193.0 L37.0,195.8 L27.0,215.0 L11.0,240.8 L3.0,257.0 L0.0,267.2 L0.0,280.5 L4.0,290.0 L6.5,293.8 L10.0,297.2 L13.0,299.2 L22.2,301.8 L26.5,301.8 L29.2,300.8 L33.5,300.5 L42.8,296.2 L50.2,288.8 L52.8,285.0 L57.8,273.8 L60.8,263.5 L60.8,261.2 L62.8,253.5 L63.0,246.5 L64.5,244.2 L64.8,241.2 L67.8,231.0 L72.8,220.8 L81.0,212.2 L84.8,210.2 L89.2,208.8 L100.5,208.8 L114.0,213.2 L121.0,216.8 L132.8,224.2 L145.2,234.5 L175.5,265.0 L179.8,268.2 L188.0,276.2 L197.0,283.2 L206.8,289.8 L217.8,295.2 L230.2,299.5 L240.2,301.8 L244.5,301.8 L247.2,302.8 L261.5,302.8 L264.2,301.8 L267.5,301.8 L276.5,299.5 L283.0,297.2 L290.0,293.8 L301.8,285.2 L309.2,276.8 L311.8,273.0 L316.2,264.0 L319.8,252.5 L319.8,238.2 L318.8,235.5 L318.5,232.2 L315.2,222.8 L312.8,217.8 L306.2,209.0 L297.0,202.0 L284.5,197.2 L280.2,197.0 L277.5,196.0 L250.2,196.0 L247.5,197.0 L241.2,197.0 L238.5,198.0 L234.2,198.0 L231.5,199.0 L227.2,199.0 L218.5,201.0 L214.2,201.0 L211.5,202.0 L208.2,202.0 L205.5,203.0 L201.2,203.0 L198.5,204.0 L193.2,204.0 L190.5,205.0 L180.2,205.0 L177.5,206.0 L165.2,206.0 L162.5,205.0 L154.2,205.0 L151.5,204.0 L147.2,204.0 L144.5,203.0 L141.2,203.0 L128.2,199.8 L117.0,196.0 L108.8,192.0 L105.0,189.5 L102.8,187.0 L101.8,184.5 L102.2,179.8 L106.2,173.0 L114.0,165.2 L124.0,157.2 L138.8,147.8 L160.8,137.2 L178.0,130.2 L197.0,120.8 L211.8,111.2 L223.8,102.2 L236.0,91.2 L243.8,81.0 L247.8,70.5 L247.8,63.2 L245.2,55.8 L243.2,52.0 L237.8,46.5 L233.5,45.0 L230.0,44.8 L221.2,45.0 L216.2,46.2 L201.8,53.0 L187.0,62.5 L174.0,72.5 L161.0,83.5 L141.8,101.5 L138.5,105.8 L129.8,114.5 L119.5,126.8 L113.5,133.0 L108.5,139.8 L95.5,155.0 L86.5,167.8 L77.8,176.5 L74.0,178.5 L70.2,179.0 L67.0,177.5 L63.2,173.8 L61.8,169.5 L61.8,165.2 L62.8,162.5 L62.8,160.2 L64.2,155.8 L69.8,144.8 L76.2,135.0 L88.2,119.8 L103.2,99.0 L137.2,55.8 L144.2,44.8 L147.8,36.5 L148.8,30.2 L149.8,27.5 L149.8,24.2 L148.8,21.5 L148.8,19.2 L145.8,11.8 L143.2,8.0 L140.8,5.5 L136.0,2.5 L126.5,0.0 L120.2,0.0 L117.5,1.0 L115.2,1.0Z" fill="#111318"/></svg>
+    <b>k_anglictine</b>
+    <span class="tag">Test · Advent</span>
+  </div>
+  <main id="app"></main>
+</div>
+<script>
+const N = 4;
+const START = new Date(2026, 10, 15);
+const TEST = true;
+const INSTA = 'k_anglictine';   // Instagram školy: sem sa posiela diplom
+const SALT = 'ka-advent-test-v1';
+const KEY = 'ka_advent_test';
+const TASKS = [{"t": "c", "p": "Vyber správny preklad.", "e": "snowflake", "o": ["snehová vločka", "snehuliak", "cencúľ", "sánky"], "a": ["snehová vločka"], "h": "Padá z neba a je malá.", "n": "snowflake = snehová vločka, snowman = snehuliak, icicle = cencúľ."}, {"t": "t", "p": "Napíš po anglicky: snehuliak", "e": "", "o": null, "a": ["snowman"], "h": "snow + man", "n": "snowman = snow (sneh) + man (muž)."}, {"t": "c", "p": "Vyber správnu možnosť.", "e": "Every year we ___ the tree together.", "o": ["decorate", "decorates", "decorating", "to decorate"], "a": ["decorate"], "h": "We + základný tvar slovesa.", "n": "Po we používame základný tvar: we decorate."}, {"t": "c", "p": "Čo znamená táto fráza?", "e": "wrapping paper", "o": ["baliaci papier", "pohľadnica", "sviečka", "lepiaca páska"], "a": ["baliaci papier"], "h": "Zabaľuješ ním darčeky.", "n": "to wrap = baliť."}, {"t": "t", "p": "Zoraď písmená a napíš slovo (sob).", "e": "E D E R N I E R", "o": null, "a": ["reindeer"], "h": "Ťahá Santove sane.", "n": "reindeer = sob (množné číslo je tiež reindeer)."}, {"t": "c", "p": "Ako po anglicky povieme Mikuláš?", "e": "", "o": ["St Nicholas", "Santa Princess", "Father Winter", "Saint George"], "a": ["st nicholas", "saint nicholas"], "h": "6. decembra.", "n": "St Nicholas Day je 6. decembra."}, {"t": "c", "p": "Je mráz! Vyber správnu možnosť.", "e": "It's freezing! ___ your gloves.", "o": ["Put on", "Put off", "Put up", "Put in"], "a": ["put on"], "h": "obliecť si = put on", "n": "put on = obliecť si, take off = vyzliecť."}, {"t": "t", "p": "Doplň chýbajúce slovo (zhasnúť svetlo).", "e": "Don't forget to ___ the lights off.", "o": null, "a": ["turn"], "h": "turn off = vypnúť.", "n": "turn off = vypnúť, turn on = zapnúť."}, {"t": "c", "p": "Vyber synonymum k slovu gift.", "e": "gift", "o": ["present", "parcel", "candle", "stocking"], "a": ["present"], "h": "Dostaneš ho pod stromčekom.", "n": "gift = present = darček."}, {"t": "t", "p": "Napíš po anglicky: sviečka", "e": "", "o": null, "a": ["candle"], "h": "Zapaľuje sa na adventnom venci.", "n": "candle = sviečka."}, {"t": "c", "p": "Vyber správny tvar.", "e": "Last Christmas we ___ to the mountains.", "o": ["went", "go", "goes", "going"], "a": ["went"], "h": "Minulý čas slovesa go.", "n": "go – went – gone."}, {"t": "c", "p": "Vyber správny predložku.", "e": "We open presents ___ Christmas morning.", "o": ["on", "in", "at", "by"], "a": ["on"], "h": "Pri dňoch a ránach: on.", "n": "on Christmas morning, on Monday."}, {"t": "t", "p": "Doplň druhý tvar slovesa give.", "e": "Santa ___ me a book last year.", "o": null, "a": ["gave"], "h": "give – gave – given", "n": "give – gave – given je nepravidelné sloveso."}, {"t": "c", "p": "Ktoré slovo NEPATRÍ k zime?", "e": "", "o": ["sledge", "scarf", "sunscreen", "icicle"], "a": ["sunscreen"], "h": "Používa sa v lete.", "n": "sunscreen = opaľovací krém."}, {"t": "t", "p": "Zoraď písmená a napíš slovo (palčiaky).", "e": "T E N T I M S", "o": null, "a": ["mittens"], "h": "Nosíš ich na rukách.", "n": "mittens = palčiaky."}, {"t": "c", "p": "Vyber správny tvar.", "e": "If it snows tomorrow, we ___ a snowman.", "o": ["will build", "would build", "build", "built"], "a": ["will build"], "h": "If + prítomný čas, will + sloveso.", "n": "If it snows, we will build ... (1. kondicionál)."}, {"t": "t", "p": "Doplň tvar slovesa be.", "e": "There ___ a lot of snow last night.", "o": null, "a": ["was"], "h": "Minulý čas, jednotné číslo.", "n": "a lot of snow je nepočítateľné, preto was."}, {"t": "c", "p": "Vyber správny preklad.", "e": "chimney", "o": ["komín", "krb", "strecha", "okno"], "a": ["komín"], "h": "Cezeň prichádza Santa.", "n": "chimney = komín, fireplace = krb."}, {"t": "c", "p": "Vyber správny tvar.", "e": "Santa has ___ the presents.", "o": ["brought", "bring", "brang", "bringed"], "a": ["brought"], "h": "bring – brought – brought", "n": "bring – brought – brought."}, {"t": "t", "p": "Doplň predložku (pod).", "e": "A present ___ the tree.", "o": null, "a": ["under"], "h": "pod = under", "n": "under = pod, over = nad."}, {"t": "c", "p": "Vyber správne slovo.", "e": "The shortest day of the year is the winter ___.", "o": ["solstice", "season", "holiday", "weather"], "a": ["solstice"], "h": "Zimný slnovrat.", "n": "winter solstice = zimný slnovrat (okolo 21. decembra)."}, {"t": "t", "p": "Doplň chýbajúce slovo.", "e": "Our family gets ___ on Christmas Eve.", "o": null, "a": ["together"], "h": "Stretneme sa spolu.", "n": "get together = stretnúť sa."}, {"t": "c", "p": "Čo odpovieš?", "e": "Merry Christmas!", "o": ["Merry Christmas to you too!", "You're welcome.", "Nice to meet you.", "I'm sorry."], "a": ["merry christmas to you too!", "merry christmas to you too"], "h": "Odpovedz rovnakým prianím.", "n": "Merry Christmas to you too! = Aj tebe veselé Vianoce!"}, {"t": "t", "p": "Posledné okienko! Doplň prianie.", "e": "Merry ___ and a happy New Year!", "o": null, "a": ["christmas"], "h": "Veselé ...", "n": "Merry Christmas and a happy New Year! Gratulujeme, zvládol si to!"}].slice(0, N);
+
+const $app = document.getElementById('app');
+const pad = n => String(n).padStart(2, '0');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// ---- date (test: ?den=3 simulates day 3 of the calendar) ----
+const qs = new URLSearchParams(location.search);
+function isoOf(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+function dayDate(n) { const d = new Date(START); d.setDate(d.getDate() + n - 1); return d; }
+const doorISO = n => isoOf(dayDate(n));
+function openDays() {            // how many doors are open today (0..N)
+  if (qs.has('den')) return Math.min(Math.max(parseInt(qs.get('den'), 10) || 0, 0), N);
+  const t = new Date(), t0 = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+  return Math.min(Math.max(Math.round((t0 - START) / 86400000) + 1, 0), N);
+}
+function todayISO() { return qs.has('den') ? doorISO(Math.max(openDays(), 1)) : isoOf(new Date()); }
+const MONTHS = ['januára','februára','marca','apríla','mája','júna','júla','augusta','septembra','októbra','novembra','decembra'];
+const startText = () => START.getDate() + '. ' + MONTHS[START.getMonth()];
+
+// ---- state ----
+let S = { nick: '', done: {} };
+let mem = null;
+function load() { try { const r = localStorage.getItem(KEY); if (r) S = Object.assign(S, JSON.parse(r)); } catch (e) { if (mem) S = mem; } }
+function save() { mem = S; try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+load();
+
+// ---- code ----
+function h53(str, seed = 0) {
+  let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+  for (let i = 0; i < str.length; i++) { const c = str.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+}
+function maskOf(done) { let m = 0; for (let i = 1; i <= N; i++) if (done[i]) m |= (1 << (i - 1)); return m >>> 0; }
+function onTimeCount(done) { let c = 0; for (let i = 1; i <= N; i++) if (done[i] === doorISO(i)) c++; return c; }
+function makeCode(nick, mask, ot) {
+  const m = mask.toString(16).toUpperCase().padStart(6, '0');
+  const o = pad(ot);
+  const chk = h53(nick.toLowerCase() + '|' + m + '|' + o + '|' + SALT).toString(16).toUpperCase().slice(-6).padStart(6, '0');
+  return 'KA-' + m + '-' + o + '-' + chk;
+}
+function checkCode(nick, code) {
+  const m = /^KA-([0-9A-F]{6})-(\d{2})-([0-9A-F]{6})$/.exec(code.trim().toUpperCase());
+  if (!m) return null;
+  const ok = makeCode(nick.replace(/^@/, '').trim(), parseInt(m[1], 16), parseInt(m[2], 10)) === code.trim().toUpperCase();
+  if (!ok) return null;
+  let days = 0; for (let i = 0; i < N; i++) if (parseInt(m[1], 16) & (1 << i)) days++;
+  return { days, ot: parseInt(m[2], 10) };
+}
+
+// ---- helpers ----
+const norm = s => s.toLowerCase().replace(/[.,!?;:"“”]/g, '').replace(/[’']/g, "'").replace(/\s+/g, ' ').trim();
+function shuffled(arr, seed) { const a = arr.slice(); let s = seed * 9301 + 49297; for (let i = a.length - 1; i > 0; i--) { s = (s * 9301 + 49297) % 233280; const j = Math.floor(s / 233280 * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+const doneCount = () => Object.keys(S.done).length;
+function fmtDate(iso) { const [y, m, d] = iso.split('-'); return +d + '. ' + +m + '. ' + y; }
+
+// ---- views ----
+let view = 'home', cur = 0, wrongs = 0;
+function go(v, d) { view = v; cur = d || 0; wrongs = 0; render(); window.scrollTo(0, 0); }
+
+function render() {
+  if (location.hash === '#overit') return renderVerify();
+  if (!S.nick) return renderWelcome();
+  if (view === 'task') return renderTask();
+  if (view === 'diploma') return renderDiploma();
+  return renderCalendar();
+}
+
+function renderWelcome(err) {
+  $app.innerHTML = `
+    <h1>Adventný <em>kalendár</em></h1>
+    <p class="lead">Každý deň sa otvorí jedno okienko s anglickou úlohou. Splň všetkých ${N} a dostaneš šancu vyhrať cenu.</p>
+    <form id="f" class="field" autocomplete="off">
+      <p class="label">Tvoj nick na Instagrame</p>
+      <input id="nick" type="text" inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="napr. petra.anglictina" maxlength="31" aria-label="Nick na Instagrame">
+      <p class="small">Bez @. Uloží sa len v tvojom telefóne, nikam sa neposiela. Na konci pošleš diplom do DM na Instagrame.</p>
+      ${err ? `<p class="err">${err}</p>` : ''}
+      <button class="btn primary block" type="submit">Začať</button>
+    </form>
+    <div class="foot"><span>Okienka sa otvárajú od ${startText()}.</span>${TEST ? '<span><b>Testovacia verzia</b></span>' : ''}</div>`;
+  document.getElementById('f').addEventListener('submit', e => {
+    e.preventDefault();
+    const v = document.getElementById('nick').value.trim().replace(/^@/, '');
+    if (!/^[A-Za-z0-9._]{1,30}$/.test(v)) return renderWelcome('Nick môže obsahovať len písmená, čísla, bodku a podčiarkovník.');
+    S.nick = v; save(); go('home');
+  });
+}
+
+function renderCalendar() {
+  const open = openDays(), dc = doneCount();
+  let cells = '';
+  for (let n = 1; n <= N; n++) {
+    let cls = 'locked', sub = '';
+    const isDone = !!S.done[n];
+    if (n > open) { cls = 'locked'; }
+    else if (isDone) { cls = 'done'; sub = '✓'; }
+    else if (n === open) { cls = 'today'; sub = 'dnes'; }
+    else { cls = 'missed'; sub = 'dobehni'; }
+    cells += `<button class="door ${cls}" data-d="${n}" ${n > open ? 'disabled aria-disabled="true"' : ''} aria-label="Okienko ${n}">${n}${sub ? `<small>${sub}</small>` : ''}</button>`;
+  }
+  const finished = dc === N;
+  $app.innerHTML = `
+    <div class="bar"><h1 style="font-size:28px">Ahoj, <em>@${esc(S.nick)}</em></h1><span class="count">${dc} / ${N}</span></div>
+    ${open === 0 ? `<p class="lead">Kalendár sa otvorí <b>${startText()}</b>. Príď sa pozrieť na prvé okienko!</p>` : `<p class="lead" style="margin-bottom:14px">${finished ? 'Všetko splnené! Vyzdvihni si diplom.' : 'Vyber si okienko. Môžeš dobehnúť aj zmeškané dni.'}</p>`}
+    ${finished ? `<button class="btn primary block" id="dip" style="margin-bottom:18px">Zobraziť diplom</button>` : ''}
+    <div class="grid">${cells}</div>
+    <div class="legend"><span><i style="background:var(--blue)"></i>dnes</span><span><i style="background:var(--good)"></i>splnené</span><span><i style="background:var(--yellow)"></i>zmeškané</span><span><i style="border-style:dashed;border-color:var(--hair)"></i>zatvorené</span></div>
+    <div class="foot"><button class="link" id="chg">Zmeniť nick</button></div>`;
+  $app.querySelectorAll('.door:not(.locked)').forEach(b => b.addEventListener('click', () => go('task', +b.dataset.d)));
+  const dip = document.getElementById('dip'); if (dip) dip.addEventListener('click', () => go('diploma'));
+  const chg = document.getElementById('chg');
+  chg.addEventListener('click', () => {
+    if (chg.dataset.sure) { S = { nick: '', done: {} }; save(); go('home'); }
+    else { chg.dataset.sure = 1; chg.textContent = 'Naozaj? Stratíš svoj postup. Klikni ešte raz.'; }
+  });
+}
+
+function renderTask() {
+  const T = TASKS[cur - 1];
+  const finished = !!S.done[cur];
+  const head = `<button class="back" id="bk">← Kalendár</button><p class="label">Okienko ${cur}</p>`;
+  let body = `<div class="card"><p class="q">${esc(T.p)}</p>${T.e ? `<p class="big">${esc(T.e)}</p>` : ''}</div>`;
+  if (T.t === 'c') {
+    const opts = shuffled(T.o, cur);
+    body += `<div class="opts">${opts.map((o, i) => `<button class="opt" data-i="${i}">${esc(o)}</button>`).join('')}</div>`;
+  } else {
+    body += `<form id="tf" class="field" autocomplete="off"><input id="ans" type="text" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Tvoja odpoveď" aria-label="Odpoveď"><div style="height:12px"></div><button class="btn primary block" type="submit">Skontrolovať</button></form>`;
+  }
+  body += `<div id="fb"></div>`;
+  $app.innerHTML = head + body;
+  document.getElementById('bk').addEventListener('click', () => go('home'));
+  const fb = document.getElementById('fb');
+  const win = () => {
+    if (!S.done[cur]) { S.done[cur] = todayISO(); save(); }
+    fb.innerHTML = `<p class="msg ok"><b>Správne!</b> ${esc(T.n)}</p><button class="btn primary block" id="nx">${doneCount() === N ? 'Zobraziť diplom' : 'Späť na kalendár'}</button>`;
+    document.getElementById('nx').addEventListener('click', () => go(doneCount() === N ? 'diploma' : 'home'));
+  };
+  const lose = () => { wrongs++; fb.innerHTML = `<p class="msg hint"><b>Skús ešte raz.</b> Nápoveda: ${esc(T.h)}</p>`; };
+  if (T.t === 'c') {
+    const opts = shuffled(T.o, cur);
+    $app.querySelectorAll('.opt').forEach(b => b.addEventListener('click', () => {
+      const val = opts[+b.dataset.i];
+      if (T.a.includes(norm(val))) {
+        $app.querySelectorAll('.opt').forEach(x => x.disabled = true); b.classList.add('ok'); win();
+      } else { b.classList.add('bad'); b.disabled = true; lose(); }
+    }));
+  } else {
+    const f = document.getElementById('tf'), inp = document.getElementById('ans');
+    f.addEventListener('submit', e => {
+      e.preventDefault();
+      if (inp.disabled) return;
+      const v = norm(inp.value);
+      if (!v) return;
+      if (T.a.includes(v)) { inp.classList.remove('bad'); inp.classList.add('ok'); inp.disabled = true; f.querySelector('button').disabled = true; win(); }
+      else { inp.classList.add('bad'); lose(); }
+    });
+    inp.addEventListener('input', () => inp.classList.remove('bad'));
+  }
+  if (finished) { // already done: show it
+    if (T.t === 'c') { const opts = shuffled(T.o, cur); $app.querySelectorAll('.opt').forEach((b, i) => { b.disabled = true; if (T.a.includes(norm(opts[i]))) b.classList.add('ok'); }); }
+    else { const inp = document.getElementById('ans'); inp.value = T.a[0]; inp.classList.add('ok'); inp.disabled = true; document.querySelector('#tf button').disabled = true; }
+    fb.innerHTML = `<p class="msg ok"><b>Splnené ${esc(fmtDate(S.done[cur]))}.</b> ${esc(T.n)}</p><button class="btn block" id="nx">Späť na kalendár</button>`;
+    document.getElementById('nx').addEventListener('click', () => go('home'));
+  }
+}
+
+function renderDiploma() {
+  const mask = maskOf(S.done), ot = onTimeCount(S.done), code = makeCode(S.nick, mask, ot);
+  const all = doneCount() === N;
+  const last = all ? Object.values(S.done).sort().slice(-1)[0] : '';
+  $app.innerHTML = `
+    <button class="back" id="bk">← Kalendár</button>
+    <div class="diploma">
+      <p class="label">Adventný kalendár ${TEST ? '(test)' : '2026'}</p>
+      <div class="serif">Diplom</div>
+      <div class="nick">@${esc(S.nick)}</div>
+      <p style="margin:0">${all ? 'splnil/a všetkých ' + N + ' okienok' : 'splnené: ' + doneCount() + ' / ' + N}</p>
+      ${all ? `<p class="small" style="margin:6px 0 0">dokončené ${esc(fmtDate(last))} · v ten deň: ${ot} / ${N}</p>` : ''}
+      <div class="code" id="code">${esc(code)}</div>
+    </div>
+    ${all ? `<p class="label">Ako sa zapojiť do žrebovania</p>
+    <ol class="steps"><li>Urob snímku obrazovky tohto diplomu.</li><li>Pošli ju do DM na Instagrame: <b>@${esc(INSTA)}</b>.</li><li>Pošli ju z vlastného účtu <b>@${esc(S.nick)}</b>.</li></ol>
+    <button class="btn block" id="cp">Skopírovať kód</button>` : `<p class="lead">Diplom bude platný, keď splníš všetkých ${N} okienok.</p>`}`;
+  document.getElementById('bk').addEventListener('click', () => go('home'));
+  const cp = document.getElementById('cp');
+  if (cp) cp.addEventListener('click', async () => { try { await navigator.clipboard.writeText(code); cp.textContent = 'Skopírované ✓'; } catch (e) { cp.textContent = 'Kód označ a skopíruj ručne'; } });
+}
+
+function renderVerify() {
+  $app.innerHTML = `
+    <h1>Overenie <em>kódu</em></h1>
+    <p class="lead">Pre učiteľku: zadaj nick a kód z diplomu.</p>
+    <form id="vf" class="field" autocomplete="off">
+      <input id="vn" type="text" placeholder="nick (bez @)" autocapitalize="off" spellcheck="false" aria-label="Nick"><div style="height:10px"></div>
+      <input id="vc" type="text" placeholder="KA-XXXXXX-00-XXXXXX" autocapitalize="characters" spellcheck="false" aria-label="Kód"><div style="height:12px"></div>
+      <button class="btn primary block" type="submit">Overiť</button>
+    </form>
+    <div id="vr" style="margin-top:14px"></div>`;
+  document.getElementById('vf').addEventListener('submit', e => {
+    e.preventDefault();
+    const r = checkCode(document.getElementById('vn').value, document.getElementById('vc').value);
+    document.getElementById('vr').innerHTML = r
+      ? `<p class="msg ok"><b>Kód je platný.</b> Splnené dni: ${r.days} / ${N}, v správny deň: ${r.ot} / ${N}.${r.days === N ? ' Spĺňa podmienky žrebovania.' : ' Nespĺňa podmienky (treba ' + N + ').'}</p>`
+      : `<p class="err"><b>Neplatný kód</b> alebo nesedí nick.</p>`;
+  });
+}
+window.addEventListener('hashchange', render);
+render();
+</script>
+</body>
+</html>
