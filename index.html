@@ -1,0 +1,3373 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Krížom-krážom · Hra</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Golos+Text:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<script>
+//---------------------------------------------------------------------
+//
+// QR Code Generator for JavaScript
+//
+// Copyright (c) 2009 Kazuhiko Arase
+//
+// URL: http://www.d-project.com/
+//
+// Licensed under the MIT license:
+//  http://www.opensource.org/licenses/mit-license.php
+//
+// The word 'QR Code' is registered trademark of
+// DENSO WAVE INCORPORATED
+//  http://www.denso-wave.com/qrcode/faqpatent-e.html
+//
+//---------------------------------------------------------------------
+
+var qrcode = function() {
+
+  //---------------------------------------------------------------------
+  // qrcode
+  //---------------------------------------------------------------------
+
+  /**
+   * qrcode
+   * @param typeNumber 1 to 40
+   * @param errorCorrectionLevel 'L','M','Q','H'
+   */
+  var qrcode = function(typeNumber, errorCorrectionLevel) {
+
+    var PAD0 = 0xEC;
+    var PAD1 = 0x11;
+
+    var _typeNumber = typeNumber;
+    var _errorCorrectionLevel = QRErrorCorrectionLevel[errorCorrectionLevel];
+    var _modules = null;
+    var _moduleCount = 0;
+    var _dataCache = null;
+    var _dataList = [];
+
+    var _this = {};
+
+    var makeImpl = function(test, maskPattern) {
+
+      _moduleCount = _typeNumber * 4 + 17;
+      _modules = function(moduleCount) {
+        var modules = new Array(moduleCount);
+        for (var row = 0; row < moduleCount; row += 1) {
+          modules[row] = new Array(moduleCount);
+          for (var col = 0; col < moduleCount; col += 1) {
+            modules[row][col] = null;
+          }
+        }
+        return modules;
+      }(_moduleCount);
+
+      setupPositionProbePattern(0, 0);
+      setupPositionProbePattern(_moduleCount - 7, 0);
+      setupPositionProbePattern(0, _moduleCount - 7);
+      setupPositionAdjustPattern();
+      setupTimingPattern();
+      setupTypeInfo(test, maskPattern);
+
+      if (_typeNumber >= 7) {
+        setupTypeNumber(test);
+      }
+
+      if (_dataCache == null) {
+        _dataCache = createData(_typeNumber, _errorCorrectionLevel, _dataList);
+      }
+
+      mapData(_dataCache, maskPattern);
+    };
+
+    var setupPositionProbePattern = function(row, col) {
+
+      for (var r = -1; r <= 7; r += 1) {
+
+        if (row + r <= -1 || _moduleCount <= row + r) continue;
+
+        for (var c = -1; c <= 7; c += 1) {
+
+          if (col + c <= -1 || _moduleCount <= col + c) continue;
+
+          if ( (0 <= r && r <= 6 && (c == 0 || c == 6) )
+              || (0 <= c && c <= 6 && (r == 0 || r == 6) )
+              || (2 <= r && r <= 4 && 2 <= c && c <= 4) ) {
+            _modules[row + r][col + c] = true;
+          } else {
+            _modules[row + r][col + c] = false;
+          }
+        }
+      }
+    };
+
+    var getBestMaskPattern = function() {
+
+      var minLostPoint = 0;
+      var pattern = 0;
+
+      for (var i = 0; i < 8; i += 1) {
+
+        makeImpl(true, i);
+
+        var lostPoint = QRUtil.getLostPoint(_this);
+
+        if (i == 0 || minLostPoint > lostPoint) {
+          minLostPoint = lostPoint;
+          pattern = i;
+        }
+      }
+
+      return pattern;
+    };
+
+    var setupTimingPattern = function() {
+
+      for (var r = 8; r < _moduleCount - 8; r += 1) {
+        if (_modules[r][6] != null) {
+          continue;
+        }
+        _modules[r][6] = (r % 2 == 0);
+      }
+
+      for (var c = 8; c < _moduleCount - 8; c += 1) {
+        if (_modules[6][c] != null) {
+          continue;
+        }
+        _modules[6][c] = (c % 2 == 0);
+      }
+    };
+
+    var setupPositionAdjustPattern = function() {
+
+      var pos = QRUtil.getPatternPosition(_typeNumber);
+
+      for (var i = 0; i < pos.length; i += 1) {
+
+        for (var j = 0; j < pos.length; j += 1) {
+
+          var row = pos[i];
+          var col = pos[j];
+
+          if (_modules[row][col] != null) {
+            continue;
+          }
+
+          for (var r = -2; r <= 2; r += 1) {
+
+            for (var c = -2; c <= 2; c += 1) {
+
+              if (r == -2 || r == 2 || c == -2 || c == 2
+                  || (r == 0 && c == 0) ) {
+                _modules[row + r][col + c] = true;
+              } else {
+                _modules[row + r][col + c] = false;
+              }
+            }
+          }
+        }
+      }
+    };
+
+    var setupTypeNumber = function(test) {
+
+      var bits = QRUtil.getBCHTypeNumber(_typeNumber);
+
+      for (var i = 0; i < 18; i += 1) {
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+        _modules[Math.floor(i / 3)][i % 3 + _moduleCount - 8 - 3] = mod;
+      }
+
+      for (var i = 0; i < 18; i += 1) {
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+        _modules[i % 3 + _moduleCount - 8 - 3][Math.floor(i / 3)] = mod;
+      }
+    };
+
+    var setupTypeInfo = function(test, maskPattern) {
+
+      var data = (_errorCorrectionLevel << 3) | maskPattern;
+      var bits = QRUtil.getBCHTypeInfo(data);
+
+      // vertical
+      for (var i = 0; i < 15; i += 1) {
+
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+
+        if (i < 6) {
+          _modules[i][8] = mod;
+        } else if (i < 8) {
+          _modules[i + 1][8] = mod;
+        } else {
+          _modules[_moduleCount - 15 + i][8] = mod;
+        }
+      }
+
+      // horizontal
+      for (var i = 0; i < 15; i += 1) {
+
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+
+        if (i < 8) {
+          _modules[8][_moduleCount - i - 1] = mod;
+        } else if (i < 9) {
+          _modules[8][15 - i - 1 + 1] = mod;
+        } else {
+          _modules[8][15 - i - 1] = mod;
+        }
+      }
+
+      // fixed module
+      _modules[_moduleCount - 8][8] = (!test);
+    };
+
+    var mapData = function(data, maskPattern) {
+
+      var inc = -1;
+      var row = _moduleCount - 1;
+      var bitIndex = 7;
+      var byteIndex = 0;
+      var maskFunc = QRUtil.getMaskFunction(maskPattern);
+
+      for (var col = _moduleCount - 1; col > 0; col -= 2) {
+
+        if (col == 6) col -= 1;
+
+        while (true) {
+
+          for (var c = 0; c < 2; c += 1) {
+
+            if (_modules[row][col - c] == null) {
+
+              var dark = false;
+
+              if (byteIndex < data.length) {
+                dark = ( ( (data[byteIndex] >>> bitIndex) & 1) == 1);
+              }
+
+              var mask = maskFunc(row, col - c);
+
+              if (mask) {
+                dark = !dark;
+              }
+
+              _modules[row][col - c] = dark;
+              bitIndex -= 1;
+
+              if (bitIndex == -1) {
+                byteIndex += 1;
+                bitIndex = 7;
+              }
+            }
+          }
+
+          row += inc;
+
+          if (row < 0 || _moduleCount <= row) {
+            row -= inc;
+            inc = -inc;
+            break;
+          }
+        }
+      }
+    };
+
+    var createBytes = function(buffer, rsBlocks) {
+
+      var offset = 0;
+
+      var maxDcCount = 0;
+      var maxEcCount = 0;
+
+      var dcdata = new Array(rsBlocks.length);
+      var ecdata = new Array(rsBlocks.length);
+
+      for (var r = 0; r < rsBlocks.length; r += 1) {
+
+        var dcCount = rsBlocks[r].dataCount;
+        var ecCount = rsBlocks[r].totalCount - dcCount;
+
+        maxDcCount = Math.max(maxDcCount, dcCount);
+        maxEcCount = Math.max(maxEcCount, ecCount);
+
+        dcdata[r] = new Array(dcCount);
+
+        for (var i = 0; i < dcdata[r].length; i += 1) {
+          dcdata[r][i] = 0xff & buffer.getBuffer()[i + offset];
+        }
+        offset += dcCount;
+
+        var rsPoly = QRUtil.getErrorCorrectPolynomial(ecCount);
+        var rawPoly = qrPolynomial(dcdata[r], rsPoly.getLength() - 1);
+
+        var modPoly = rawPoly.mod(rsPoly);
+        ecdata[r] = new Array(rsPoly.getLength() - 1);
+        for (var i = 0; i < ecdata[r].length; i += 1) {
+          var modIndex = i + modPoly.getLength() - ecdata[r].length;
+          ecdata[r][i] = (modIndex >= 0)? modPoly.getAt(modIndex) : 0;
+        }
+      }
+
+      var totalCodeCount = 0;
+      for (var i = 0; i < rsBlocks.length; i += 1) {
+        totalCodeCount += rsBlocks[i].totalCount;
+      }
+
+      var data = new Array(totalCodeCount);
+      var index = 0;
+
+      for (var i = 0; i < maxDcCount; i += 1) {
+        for (var r = 0; r < rsBlocks.length; r += 1) {
+          if (i < dcdata[r].length) {
+            data[index] = dcdata[r][i];
+            index += 1;
+          }
+        }
+      }
+
+      for (var i = 0; i < maxEcCount; i += 1) {
+        for (var r = 0; r < rsBlocks.length; r += 1) {
+          if (i < ecdata[r].length) {
+            data[index] = ecdata[r][i];
+            index += 1;
+          }
+        }
+      }
+
+      return data;
+    };
+
+    var createData = function(typeNumber, errorCorrectionLevel, dataList) {
+
+      var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, errorCorrectionLevel);
+
+      var buffer = qrBitBuffer();
+
+      for (var i = 0; i < dataList.length; i += 1) {
+        var data = dataList[i];
+        buffer.put(data.getMode(), 4);
+        buffer.put(data.getLength(), QRUtil.getLengthInBits(data.getMode(), typeNumber) );
+        data.write(buffer);
+      }
+
+      // calc num max data.
+      var totalDataCount = 0;
+      for (var i = 0; i < rsBlocks.length; i += 1) {
+        totalDataCount += rsBlocks[i].dataCount;
+      }
+
+      if (buffer.getLengthInBits() > totalDataCount * 8) {
+        throw 'code length overflow. ('
+          + buffer.getLengthInBits()
+          + '>'
+          + totalDataCount * 8
+          + ')';
+      }
+
+      // end code
+      if (buffer.getLengthInBits() + 4 <= totalDataCount * 8) {
+        buffer.put(0, 4);
+      }
+
+      // padding
+      while (buffer.getLengthInBits() % 8 != 0) {
+        buffer.putBit(false);
+      }
+
+      // padding
+      while (true) {
+
+        if (buffer.getLengthInBits() >= totalDataCount * 8) {
+          break;
+        }
+        buffer.put(PAD0, 8);
+
+        if (buffer.getLengthInBits() >= totalDataCount * 8) {
+          break;
+        }
+        buffer.put(PAD1, 8);
+      }
+
+      return createBytes(buffer, rsBlocks);
+    };
+
+    _this.addData = function(data, mode) {
+
+      mode = mode || 'Byte';
+
+      var newData = null;
+
+      switch(mode) {
+      case 'Numeric' :
+        newData = qrNumber(data);
+        break;
+      case 'Alphanumeric' :
+        newData = qrAlphaNum(data);
+        break;
+      case 'Byte' :
+        newData = qr8BitByte(data);
+        break;
+      case 'Kanji' :
+        newData = qrKanji(data);
+        break;
+      default :
+        throw 'mode:' + mode;
+      }
+
+      _dataList.push(newData);
+      _dataCache = null;
+    };
+
+    _this.isDark = function(row, col) {
+      if (row < 0 || _moduleCount <= row || col < 0 || _moduleCount <= col) {
+        throw row + ',' + col;
+      }
+      return _modules[row][col];
+    };
+
+    _this.getModuleCount = function() {
+      return _moduleCount;
+    };
+
+    _this.make = function() {
+      if (_typeNumber < 1) {
+        var typeNumber = 1;
+
+        for (; typeNumber < 40; typeNumber++) {
+          var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, _errorCorrectionLevel);
+          var buffer = qrBitBuffer();
+
+          for (var i = 0; i < _dataList.length; i++) {
+            var data = _dataList[i];
+            buffer.put(data.getMode(), 4);
+            buffer.put(data.getLength(), QRUtil.getLengthInBits(data.getMode(), typeNumber) );
+            data.write(buffer);
+          }
+
+          var totalDataCount = 0;
+          for (var i = 0; i < rsBlocks.length; i++) {
+            totalDataCount += rsBlocks[i].dataCount;
+          }
+
+          if (buffer.getLengthInBits() <= totalDataCount * 8) {
+            break;
+          }
+        }
+
+        _typeNumber = typeNumber;
+      }
+
+      makeImpl(false, getBestMaskPattern() );
+    };
+
+    _this.createTableTag = function(cellSize, margin) {
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      var qrHtml = '';
+
+      qrHtml += '<table style="';
+      qrHtml += ' border-width: 0px; border-style: none;';
+      qrHtml += ' border-collapse: collapse;';
+      qrHtml += ' padding: 0px; margin: ' + margin + 'px;';
+      qrHtml += '">';
+      qrHtml += '<tbody>';
+
+      for (var r = 0; r < _this.getModuleCount(); r += 1) {
+
+        qrHtml += '<tr>';
+
+        for (var c = 0; c < _this.getModuleCount(); c += 1) {
+          qrHtml += '<td style="';
+          qrHtml += ' border-width: 0px; border-style: none;';
+          qrHtml += ' border-collapse: collapse;';
+          qrHtml += ' padding: 0px; margin: 0px;';
+          qrHtml += ' width: ' + cellSize + 'px;';
+          qrHtml += ' height: ' + cellSize + 'px;';
+          qrHtml += ' background-color: ';
+          qrHtml += _this.isDark(r, c)? '#000000' : '#ffffff';
+          qrHtml += ';';
+          qrHtml += '"/>';
+        }
+
+        qrHtml += '</tr>';
+      }
+
+      qrHtml += '</tbody>';
+      qrHtml += '</table>';
+
+      return qrHtml;
+    };
+
+    _this.createSvgTag = function(cellSize, margin, alt, title) {
+
+      var opts = {};
+      if (typeof arguments[0] == 'object') {
+        // Called by options.
+        opts = arguments[0];
+        // overwrite cellSize and margin.
+        cellSize = opts.cellSize;
+        margin = opts.margin;
+        alt = opts.alt;
+        title = opts.title;
+      }
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      // Compose alt property surrogate
+      alt = (typeof alt === 'string') ? {text: alt} : alt || {};
+      alt.text = alt.text || null;
+      alt.id = (alt.text) ? alt.id || 'qrcode-description' : null;
+
+      // Compose title property surrogate
+      title = (typeof title === 'string') ? {text: title} : title || {};
+      title.text = title.text || null;
+      title.id = (title.text) ? title.id || 'qrcode-title' : null;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var c, mc, r, mr, qrSvg='', rect;
+
+      rect = 'l' + cellSize + ',0 0,' + cellSize +
+        ' -' + cellSize + ',0 0,-' + cellSize + 'z ';
+
+      qrSvg += '<svg version="1.1" xmlns="http://www.w3.org/2000/svg"';
+      qrSvg += !opts.scalable ? ' width="' + size + 'px" height="' + size + 'px"' : '';
+      qrSvg += ' viewBox="0 0 ' + size + ' ' + size + '" ';
+      qrSvg += ' preserveAspectRatio="xMinYMin meet"';
+      qrSvg += (title.text || alt.text) ? ' role="img" aria-labelledby="' +
+          escapeXml([title.id, alt.id].join(' ').trim() ) + '"' : '';
+      qrSvg += '>';
+      qrSvg += (title.text) ? '<title id="' + escapeXml(title.id) + '">' +
+          escapeXml(title.text) + '</title>' : '';
+      qrSvg += (alt.text) ? '<description id="' + escapeXml(alt.id) + '">' +
+          escapeXml(alt.text) + '</description>' : '';
+      qrSvg += '<rect width="100%" height="100%" fill="white" cx="0" cy="0"/>';
+      qrSvg += '<path d="';
+
+      for (r = 0; r < _this.getModuleCount(); r += 1) {
+        mr = r * cellSize + margin;
+        for (c = 0; c < _this.getModuleCount(); c += 1) {
+          if (_this.isDark(r, c) ) {
+            mc = c*cellSize+margin;
+            qrSvg += 'M' + mc + ',' + mr + rect;
+          }
+        }
+      }
+
+      qrSvg += '" stroke="transparent" fill="black"/>';
+      qrSvg += '</svg>';
+
+      return qrSvg;
+    };
+
+    _this.createDataURL = function(cellSize, margin) {
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+
+      return createDataURL(size, size, function(x, y) {
+        if (min <= x && x < max && min <= y && y < max) {
+          var c = Math.floor( (x - min) / cellSize);
+          var r = Math.floor( (y - min) / cellSize);
+          return _this.isDark(r, c)? 0 : 1;
+        } else {
+          return 1;
+        }
+      } );
+    };
+
+    _this.createImgTag = function(cellSize, margin, alt) {
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+
+      var img = '';
+      img += '<img';
+      img += '\u0020src="';
+      img += _this.createDataURL(cellSize, margin);
+      img += '"';
+      img += '\u0020width="';
+      img += size;
+      img += '"';
+      img += '\u0020height="';
+      img += size;
+      img += '"';
+      if (alt) {
+        img += '\u0020alt="';
+        img += escapeXml(alt);
+        img += '"';
+      }
+      img += '/>';
+
+      return img;
+    };
+
+    var escapeXml = function(s) {
+      var escaped = '';
+      for (var i = 0; i < s.length; i += 1) {
+        var c = s.charAt(i);
+        switch(c) {
+        case '<': escaped += '&lt;'; break;
+        case '>': escaped += '&gt;'; break;
+        case '&': escaped += '&amp;'; break;
+        case '"': escaped += '&quot;'; break;
+        default : escaped += c; break;
+        }
+      }
+      return escaped;
+    };
+
+    var _createHalfASCII = function(margin) {
+      var cellSize = 1;
+      margin = (typeof margin == 'undefined')? cellSize * 2 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+
+      var y, x, r1, r2, p;
+
+      var blocks = {
+        '██': '█',
+        '█ ': '▀',
+        ' █': '▄',
+        '  ': ' '
+      };
+
+      var blocksLastLineNoMargin = {
+        '██': '▀',
+        '█ ': '▀',
+        ' █': ' ',
+        '  ': ' '
+      };
+
+      var ascii = '';
+      for (y = 0; y < size; y += 2) {
+        r1 = Math.floor((y - min) / cellSize);
+        r2 = Math.floor((y + 1 - min) / cellSize);
+        for (x = 0; x < size; x += 1) {
+          p = '█';
+
+          if (min <= x && x < max && min <= y && y < max && _this.isDark(r1, Math.floor((x - min) / cellSize))) {
+            p = ' ';
+          }
+
+          if (min <= x && x < max && min <= y+1 && y+1 < max && _this.isDark(r2, Math.floor((x - min) / cellSize))) {
+            p += ' ';
+          }
+          else {
+            p += '█';
+          }
+
+          // Output 2 characters per pixel, to create full square. 1 character per pixels gives only half width of square.
+          ascii += (margin < 1 && y+1 >= max) ? blocksLastLineNoMargin[p] : blocks[p];
+        }
+
+        ascii += '\n';
+      }
+
+      if (size % 2 && margin > 0) {
+        return ascii.substring(0, ascii.length - size - 1) + Array(size+1).join('▀');
+      }
+
+      return ascii.substring(0, ascii.length-1);
+    };
+
+    _this.createASCII = function(cellSize, margin) {
+      cellSize = cellSize || 1;
+
+      if (cellSize < 2) {
+        return _createHalfASCII(margin);
+      }
+
+      cellSize -= 1;
+      margin = (typeof margin == 'undefined')? cellSize * 2 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+
+      var y, x, r, p;
+
+      var white = Array(cellSize+1).join('██');
+      var black = Array(cellSize+1).join('  ');
+
+      var ascii = '';
+      var line = '';
+      for (y = 0; y < size; y += 1) {
+        r = Math.floor( (y - min) / cellSize);
+        line = '';
+        for (x = 0; x < size; x += 1) {
+          p = 1;
+
+          if (min <= x && x < max && min <= y && y < max && _this.isDark(r, Math.floor((x - min) / cellSize))) {
+            p = 0;
+          }
+
+          // Output 2 characters per pixel, to create full square. 1 character per pixels gives only half width of square.
+          line += p ? white : black;
+        }
+
+        for (r = 0; r < cellSize; r += 1) {
+          ascii += line + '\n';
+        }
+      }
+
+      return ascii.substring(0, ascii.length-1);
+    };
+
+    _this.renderTo2dContext = function(context, cellSize) {
+      cellSize = cellSize || 2;
+      var length = _this.getModuleCount();
+      for (var row = 0; row < length; row++) {
+        for (var col = 0; col < length; col++) {
+          context.fillStyle = _this.isDark(row, col) ? 'black' : 'white';
+          context.fillRect(row * cellSize, col * cellSize, cellSize, cellSize);
+        }
+      }
+    }
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrcode.stringToBytes
+  //---------------------------------------------------------------------
+
+  qrcode.stringToBytesFuncs = {
+    'default' : function(s) {
+      var bytes = [];
+      for (var i = 0; i < s.length; i += 1) {
+        var c = s.charCodeAt(i);
+        bytes.push(c & 0xff);
+      }
+      return bytes;
+    }
+  };
+
+  qrcode.stringToBytes = qrcode.stringToBytesFuncs['default'];
+
+  //---------------------------------------------------------------------
+  // qrcode.createStringToBytes
+  //---------------------------------------------------------------------
+
+  /**
+   * @param unicodeData base64 string of byte array.
+   * [16bit Unicode],[16bit Bytes], ...
+   * @param numChars
+   */
+  qrcode.createStringToBytes = function(unicodeData, numChars) {
+
+    // create conversion map.
+
+    var unicodeMap = function() {
+
+      var bin = base64DecodeInputStream(unicodeData);
+      var read = function() {
+        var b = bin.read();
+        if (b == -1) throw 'eof';
+        return b;
+      };
+
+      var count = 0;
+      var unicodeMap = {};
+      while (true) {
+        var b0 = bin.read();
+        if (b0 == -1) break;
+        var b1 = read();
+        var b2 = read();
+        var b3 = read();
+        var k = String.fromCharCode( (b0 << 8) | b1);
+        var v = (b2 << 8) | b3;
+        unicodeMap[k] = v;
+        count += 1;
+      }
+      if (count != numChars) {
+        throw count + ' != ' + numChars;
+      }
+
+      return unicodeMap;
+    }();
+
+    var unknownChar = '?'.charCodeAt(0);
+
+    return function(s) {
+      var bytes = [];
+      for (var i = 0; i < s.length; i += 1) {
+        var c = s.charCodeAt(i);
+        if (c < 128) {
+          bytes.push(c);
+        } else {
+          var b = unicodeMap[s.charAt(i)];
+          if (typeof b == 'number') {
+            if ( (b & 0xff) == b) {
+              // 1byte
+              bytes.push(b);
+            } else {
+              // 2bytes
+              bytes.push(b >>> 8);
+              bytes.push(b & 0xff);
+            }
+          } else {
+            bytes.push(unknownChar);
+          }
+        }
+      }
+      return bytes;
+    };
+  };
+
+  //---------------------------------------------------------------------
+  // QRMode
+  //---------------------------------------------------------------------
+
+  var QRMode = {
+    MODE_NUMBER :    1 << 0,
+    MODE_ALPHA_NUM : 1 << 1,
+    MODE_8BIT_BYTE : 1 << 2,
+    MODE_KANJI :     1 << 3
+  };
+
+  //---------------------------------------------------------------------
+  // QRErrorCorrectionLevel
+  //---------------------------------------------------------------------
+
+  var QRErrorCorrectionLevel = {
+    L : 1,
+    M : 0,
+    Q : 3,
+    H : 2
+  };
+
+  //---------------------------------------------------------------------
+  // QRMaskPattern
+  //---------------------------------------------------------------------
+
+  var QRMaskPattern = {
+    PATTERN000 : 0,
+    PATTERN001 : 1,
+    PATTERN010 : 2,
+    PATTERN011 : 3,
+    PATTERN100 : 4,
+    PATTERN101 : 5,
+    PATTERN110 : 6,
+    PATTERN111 : 7
+  };
+
+  //---------------------------------------------------------------------
+  // QRUtil
+  //---------------------------------------------------------------------
+
+  var QRUtil = function() {
+
+    var PATTERN_POSITION_TABLE = [
+      [],
+      [6, 18],
+      [6, 22],
+      [6, 26],
+      [6, 30],
+      [6, 34],
+      [6, 22, 38],
+      [6, 24, 42],
+      [6, 26, 46],
+      [6, 28, 50],
+      [6, 30, 54],
+      [6, 32, 58],
+      [6, 34, 62],
+      [6, 26, 46, 66],
+      [6, 26, 48, 70],
+      [6, 26, 50, 74],
+      [6, 30, 54, 78],
+      [6, 30, 56, 82],
+      [6, 30, 58, 86],
+      [6, 34, 62, 90],
+      [6, 28, 50, 72, 94],
+      [6, 26, 50, 74, 98],
+      [6, 30, 54, 78, 102],
+      [6, 28, 54, 80, 106],
+      [6, 32, 58, 84, 110],
+      [6, 30, 58, 86, 114],
+      [6, 34, 62, 90, 118],
+      [6, 26, 50, 74, 98, 122],
+      [6, 30, 54, 78, 102, 126],
+      [6, 26, 52, 78, 104, 130],
+      [6, 30, 56, 82, 108, 134],
+      [6, 34, 60, 86, 112, 138],
+      [6, 30, 58, 86, 114, 142],
+      [6, 34, 62, 90, 118, 146],
+      [6, 30, 54, 78, 102, 126, 150],
+      [6, 24, 50, 76, 102, 128, 154],
+      [6, 28, 54, 80, 106, 132, 158],
+      [6, 32, 58, 84, 110, 136, 162],
+      [6, 26, 54, 82, 110, 138, 166],
+      [6, 30, 58, 86, 114, 142, 170]
+    ];
+    var G15 = (1 << 10) | (1 << 8) | (1 << 5) | (1 << 4) | (1 << 2) | (1 << 1) | (1 << 0);
+    var G18 = (1 << 12) | (1 << 11) | (1 << 10) | (1 << 9) | (1 << 8) | (1 << 5) | (1 << 2) | (1 << 0);
+    var G15_MASK = (1 << 14) | (1 << 12) | (1 << 10) | (1 << 4) | (1 << 1);
+
+    var _this = {};
+
+    var getBCHDigit = function(data) {
+      var digit = 0;
+      while (data != 0) {
+        digit += 1;
+        data >>>= 1;
+      }
+      return digit;
+    };
+
+    _this.getBCHTypeInfo = function(data) {
+      var d = data << 10;
+      while (getBCHDigit(d) - getBCHDigit(G15) >= 0) {
+        d ^= (G15 << (getBCHDigit(d) - getBCHDigit(G15) ) );
+      }
+      return ( (data << 10) | d) ^ G15_MASK;
+    };
+
+    _this.getBCHTypeNumber = function(data) {
+      var d = data << 12;
+      while (getBCHDigit(d) - getBCHDigit(G18) >= 0) {
+        d ^= (G18 << (getBCHDigit(d) - getBCHDigit(G18) ) );
+      }
+      return (data << 12) | d;
+    };
+
+    _this.getPatternPosition = function(typeNumber) {
+      return PATTERN_POSITION_TABLE[typeNumber - 1];
+    };
+
+    _this.getMaskFunction = function(maskPattern) {
+
+      switch (maskPattern) {
+
+      case QRMaskPattern.PATTERN000 :
+        return function(i, j) { return (i + j) % 2 == 0; };
+      case QRMaskPattern.PATTERN001 :
+        return function(i, j) { return i % 2 == 0; };
+      case QRMaskPattern.PATTERN010 :
+        return function(i, j) { return j % 3 == 0; };
+      case QRMaskPattern.PATTERN011 :
+        return function(i, j) { return (i + j) % 3 == 0; };
+      case QRMaskPattern.PATTERN100 :
+        return function(i, j) { return (Math.floor(i / 2) + Math.floor(j / 3) ) % 2 == 0; };
+      case QRMaskPattern.PATTERN101 :
+        return function(i, j) { return (i * j) % 2 + (i * j) % 3 == 0; };
+      case QRMaskPattern.PATTERN110 :
+        return function(i, j) { return ( (i * j) % 2 + (i * j) % 3) % 2 == 0; };
+      case QRMaskPattern.PATTERN111 :
+        return function(i, j) { return ( (i * j) % 3 + (i + j) % 2) % 2 == 0; };
+
+      default :
+        throw 'bad maskPattern:' + maskPattern;
+      }
+    };
+
+    _this.getErrorCorrectPolynomial = function(errorCorrectLength) {
+      var a = qrPolynomial([1], 0);
+      for (var i = 0; i < errorCorrectLength; i += 1) {
+        a = a.multiply(qrPolynomial([1, QRMath.gexp(i)], 0) );
+      }
+      return a;
+    };
+
+    _this.getLengthInBits = function(mode, type) {
+
+      if (1 <= type && type < 10) {
+
+        // 1 - 9
+
+        switch(mode) {
+        case QRMode.MODE_NUMBER    : return 10;
+        case QRMode.MODE_ALPHA_NUM : return 9;
+        case QRMode.MODE_8BIT_BYTE : return 8;
+        case QRMode.MODE_KANJI     : return 8;
+        default :
+          throw 'mode:' + mode;
+        }
+
+      } else if (type < 27) {
+
+        // 10 - 26
+
+        switch(mode) {
+        case QRMode.MODE_NUMBER    : return 12;
+        case QRMode.MODE_ALPHA_NUM : return 11;
+        case QRMode.MODE_8BIT_BYTE : return 16;
+        case QRMode.MODE_KANJI     : return 10;
+        default :
+          throw 'mode:' + mode;
+        }
+
+      } else if (type < 41) {
+
+        // 27 - 40
+
+        switch(mode) {
+        case QRMode.MODE_NUMBER    : return 14;
+        case QRMode.MODE_ALPHA_NUM : return 13;
+        case QRMode.MODE_8BIT_BYTE : return 16;
+        case QRMode.MODE_KANJI     : return 12;
+        default :
+          throw 'mode:' + mode;
+        }
+
+      } else {
+        throw 'type:' + type;
+      }
+    };
+
+    _this.getLostPoint = function(qrcode) {
+
+      var moduleCount = qrcode.getModuleCount();
+
+      var lostPoint = 0;
+
+      // LEVEL1
+
+      for (var row = 0; row < moduleCount; row += 1) {
+        for (var col = 0; col < moduleCount; col += 1) {
+
+          var sameCount = 0;
+          var dark = qrcode.isDark(row, col);
+
+          for (var r = -1; r <= 1; r += 1) {
+
+            if (row + r < 0 || moduleCount <= row + r) {
+              continue;
+            }
+
+            for (var c = -1; c <= 1; c += 1) {
+
+              if (col + c < 0 || moduleCount <= col + c) {
+                continue;
+              }
+
+              if (r == 0 && c == 0) {
+                continue;
+              }
+
+              if (dark == qrcode.isDark(row + r, col + c) ) {
+                sameCount += 1;
+              }
+            }
+          }
+
+          if (sameCount > 5) {
+            lostPoint += (3 + sameCount - 5);
+          }
+        }
+      };
+
+      // LEVEL2
+
+      for (var row = 0; row < moduleCount - 1; row += 1) {
+        for (var col = 0; col < moduleCount - 1; col += 1) {
+          var count = 0;
+          if (qrcode.isDark(row, col) ) count += 1;
+          if (qrcode.isDark(row + 1, col) ) count += 1;
+          if (qrcode.isDark(row, col + 1) ) count += 1;
+          if (qrcode.isDark(row + 1, col + 1) ) count += 1;
+          if (count == 0 || count == 4) {
+            lostPoint += 3;
+          }
+        }
+      }
+
+      // LEVEL3
+
+      for (var row = 0; row < moduleCount; row += 1) {
+        for (var col = 0; col < moduleCount - 6; col += 1) {
+          if (qrcode.isDark(row, col)
+              && !qrcode.isDark(row, col + 1)
+              &&  qrcode.isDark(row, col + 2)
+              &&  qrcode.isDark(row, col + 3)
+              &&  qrcode.isDark(row, col + 4)
+              && !qrcode.isDark(row, col + 5)
+              &&  qrcode.isDark(row, col + 6) ) {
+            lostPoint += 40;
+          }
+        }
+      }
+
+      for (var col = 0; col < moduleCount; col += 1) {
+        for (var row = 0; row < moduleCount - 6; row += 1) {
+          if (qrcode.isDark(row, col)
+              && !qrcode.isDark(row + 1, col)
+              &&  qrcode.isDark(row + 2, col)
+              &&  qrcode.isDark(row + 3, col)
+              &&  qrcode.isDark(row + 4, col)
+              && !qrcode.isDark(row + 5, col)
+              &&  qrcode.isDark(row + 6, col) ) {
+            lostPoint += 40;
+          }
+        }
+      }
+
+      // LEVEL4
+
+      var darkCount = 0;
+
+      for (var col = 0; col < moduleCount; col += 1) {
+        for (var row = 0; row < moduleCount; row += 1) {
+          if (qrcode.isDark(row, col) ) {
+            darkCount += 1;
+          }
+        }
+      }
+
+      var ratio = Math.abs(100 * darkCount / moduleCount / moduleCount - 50) / 5;
+      lostPoint += ratio * 10;
+
+      return lostPoint;
+    };
+
+    return _this;
+  }();
+
+  //---------------------------------------------------------------------
+  // QRMath
+  //---------------------------------------------------------------------
+
+  var QRMath = function() {
+
+    var EXP_TABLE = new Array(256);
+    var LOG_TABLE = new Array(256);
+
+    // initialize tables
+    for (var i = 0; i < 8; i += 1) {
+      EXP_TABLE[i] = 1 << i;
+    }
+    for (var i = 8; i < 256; i += 1) {
+      EXP_TABLE[i] = EXP_TABLE[i - 4]
+        ^ EXP_TABLE[i - 5]
+        ^ EXP_TABLE[i - 6]
+        ^ EXP_TABLE[i - 8];
+    }
+    for (var i = 0; i < 255; i += 1) {
+      LOG_TABLE[EXP_TABLE[i] ] = i;
+    }
+
+    var _this = {};
+
+    _this.glog = function(n) {
+
+      if (n < 1) {
+        throw 'glog(' + n + ')';
+      }
+
+      return LOG_TABLE[n];
+    };
+
+    _this.gexp = function(n) {
+
+      while (n < 0) {
+        n += 255;
+      }
+
+      while (n >= 256) {
+        n -= 255;
+      }
+
+      return EXP_TABLE[n];
+    };
+
+    return _this;
+  }();
+
+  //---------------------------------------------------------------------
+  // qrPolynomial
+  //---------------------------------------------------------------------
+
+  function qrPolynomial(num, shift) {
+
+    if (typeof num.length == 'undefined') {
+      throw num.length + '/' + shift;
+    }
+
+    var _num = function() {
+      var offset = 0;
+      while (offset < num.length && num[offset] == 0) {
+        offset += 1;
+      }
+      var _num = new Array(num.length - offset + shift);
+      for (var i = 0; i < num.length - offset; i += 1) {
+        _num[i] = num[i + offset];
+      }
+      return _num;
+    }();
+
+    var _this = {};
+
+    _this.getAt = function(index) {
+      return _num[index];
+    };
+
+    _this.getLength = function() {
+      return _num.length;
+    };
+
+    _this.multiply = function(e) {
+
+      var num = new Array(_this.getLength() + e.getLength() - 1);
+
+      for (var i = 0; i < _this.getLength(); i += 1) {
+        for (var j = 0; j < e.getLength(); j += 1) {
+          num[i + j] ^= QRMath.gexp(QRMath.glog(_this.getAt(i) ) + QRMath.glog(e.getAt(j) ) );
+        }
+      }
+
+      return qrPolynomial(num, 0);
+    };
+
+    _this.mod = function(e) {
+
+      if (_this.getLength() - e.getLength() < 0) {
+        return _this;
+      }
+
+      var ratio = QRMath.glog(_this.getAt(0) ) - QRMath.glog(e.getAt(0) );
+
+      var num = new Array(_this.getLength() );
+      for (var i = 0; i < _this.getLength(); i += 1) {
+        num[i] = _this.getAt(i);
+      }
+
+      for (var i = 0; i < e.getLength(); i += 1) {
+        num[i] ^= QRMath.gexp(QRMath.glog(e.getAt(i) ) + ratio);
+      }
+
+      // recursive call
+      return qrPolynomial(num, 0).mod(e);
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // QRRSBlock
+  //---------------------------------------------------------------------
+
+  var QRRSBlock = function() {
+
+    var RS_BLOCK_TABLE = [
+
+      // L
+      // M
+      // Q
+      // H
+
+      // 1
+      [1, 26, 19],
+      [1, 26, 16],
+      [1, 26, 13],
+      [1, 26, 9],
+
+      // 2
+      [1, 44, 34],
+      [1, 44, 28],
+      [1, 44, 22],
+      [1, 44, 16],
+
+      // 3
+      [1, 70, 55],
+      [1, 70, 44],
+      [2, 35, 17],
+      [2, 35, 13],
+
+      // 4
+      [1, 100, 80],
+      [2, 50, 32],
+      [2, 50, 24],
+      [4, 25, 9],
+
+      // 5
+      [1, 134, 108],
+      [2, 67, 43],
+      [2, 33, 15, 2, 34, 16],
+      [2, 33, 11, 2, 34, 12],
+
+      // 6
+      [2, 86, 68],
+      [4, 43, 27],
+      [4, 43, 19],
+      [4, 43, 15],
+
+      // 7
+      [2, 98, 78],
+      [4, 49, 31],
+      [2, 32, 14, 4, 33, 15],
+      [4, 39, 13, 1, 40, 14],
+
+      // 8
+      [2, 121, 97],
+      [2, 60, 38, 2, 61, 39],
+      [4, 40, 18, 2, 41, 19],
+      [4, 40, 14, 2, 41, 15],
+
+      // 9
+      [2, 146, 116],
+      [3, 58, 36, 2, 59, 37],
+      [4, 36, 16, 4, 37, 17],
+      [4, 36, 12, 4, 37, 13],
+
+      // 10
+      [2, 86, 68, 2, 87, 69],
+      [4, 69, 43, 1, 70, 44],
+      [6, 43, 19, 2, 44, 20],
+      [6, 43, 15, 2, 44, 16],
+
+      // 11
+      [4, 101, 81],
+      [1, 80, 50, 4, 81, 51],
+      [4, 50, 22, 4, 51, 23],
+      [3, 36, 12, 8, 37, 13],
+
+      // 12
+      [2, 116, 92, 2, 117, 93],
+      [6, 58, 36, 2, 59, 37],
+      [4, 46, 20, 6, 47, 21],
+      [7, 42, 14, 4, 43, 15],
+
+      // 13
+      [4, 133, 107],
+      [8, 59, 37, 1, 60, 38],
+      [8, 44, 20, 4, 45, 21],
+      [12, 33, 11, 4, 34, 12],
+
+      // 14
+      [3, 145, 115, 1, 146, 116],
+      [4, 64, 40, 5, 65, 41],
+      [11, 36, 16, 5, 37, 17],
+      [11, 36, 12, 5, 37, 13],
+
+      // 15
+      [5, 109, 87, 1, 110, 88],
+      [5, 65, 41, 5, 66, 42],
+      [5, 54, 24, 7, 55, 25],
+      [11, 36, 12, 7, 37, 13],
+
+      // 16
+      [5, 122, 98, 1, 123, 99],
+      [7, 73, 45, 3, 74, 46],
+      [15, 43, 19, 2, 44, 20],
+      [3, 45, 15, 13, 46, 16],
+
+      // 17
+      [1, 135, 107, 5, 136, 108],
+      [10, 74, 46, 1, 75, 47],
+      [1, 50, 22, 15, 51, 23],
+      [2, 42, 14, 17, 43, 15],
+
+      // 18
+      [5, 150, 120, 1, 151, 121],
+      [9, 69, 43, 4, 70, 44],
+      [17, 50, 22, 1, 51, 23],
+      [2, 42, 14, 19, 43, 15],
+
+      // 19
+      [3, 141, 113, 4, 142, 114],
+      [3, 70, 44, 11, 71, 45],
+      [17, 47, 21, 4, 48, 22],
+      [9, 39, 13, 16, 40, 14],
+
+      // 20
+      [3, 135, 107, 5, 136, 108],
+      [3, 67, 41, 13, 68, 42],
+      [15, 54, 24, 5, 55, 25],
+      [15, 43, 15, 10, 44, 16],
+
+      // 21
+      [4, 144, 116, 4, 145, 117],
+      [17, 68, 42],
+      [17, 50, 22, 6, 51, 23],
+      [19, 46, 16, 6, 47, 17],
+
+      // 22
+      [2, 139, 111, 7, 140, 112],
+      [17, 74, 46],
+      [7, 54, 24, 16, 55, 25],
+      [34, 37, 13],
+
+      // 23
+      [4, 151, 121, 5, 152, 122],
+      [4, 75, 47, 14, 76, 48],
+      [11, 54, 24, 14, 55, 25],
+      [16, 45, 15, 14, 46, 16],
+
+      // 24
+      [6, 147, 117, 4, 148, 118],
+      [6, 73, 45, 14, 74, 46],
+      [11, 54, 24, 16, 55, 25],
+      [30, 46, 16, 2, 47, 17],
+
+      // 25
+      [8, 132, 106, 4, 133, 107],
+      [8, 75, 47, 13, 76, 48],
+      [7, 54, 24, 22, 55, 25],
+      [22, 45, 15, 13, 46, 16],
+
+      // 26
+      [10, 142, 114, 2, 143, 115],
+      [19, 74, 46, 4, 75, 47],
+      [28, 50, 22, 6, 51, 23],
+      [33, 46, 16, 4, 47, 17],
+
+      // 27
+      [8, 152, 122, 4, 153, 123],
+      [22, 73, 45, 3, 74, 46],
+      [8, 53, 23, 26, 54, 24],
+      [12, 45, 15, 28, 46, 16],
+
+      // 28
+      [3, 147, 117, 10, 148, 118],
+      [3, 73, 45, 23, 74, 46],
+      [4, 54, 24, 31, 55, 25],
+      [11, 45, 15, 31, 46, 16],
+
+      // 29
+      [7, 146, 116, 7, 147, 117],
+      [21, 73, 45, 7, 74, 46],
+      [1, 53, 23, 37, 54, 24],
+      [19, 45, 15, 26, 46, 16],
+
+      // 30
+      [5, 145, 115, 10, 146, 116],
+      [19, 75, 47, 10, 76, 48],
+      [15, 54, 24, 25, 55, 25],
+      [23, 45, 15, 25, 46, 16],
+
+      // 31
+      [13, 145, 115, 3, 146, 116],
+      [2, 74, 46, 29, 75, 47],
+      [42, 54, 24, 1, 55, 25],
+      [23, 45, 15, 28, 46, 16],
+
+      // 32
+      [17, 145, 115],
+      [10, 74, 46, 23, 75, 47],
+      [10, 54, 24, 35, 55, 25],
+      [19, 45, 15, 35, 46, 16],
+
+      // 33
+      [17, 145, 115, 1, 146, 116],
+      [14, 74, 46, 21, 75, 47],
+      [29, 54, 24, 19, 55, 25],
+      [11, 45, 15, 46, 46, 16],
+
+      // 34
+      [13, 145, 115, 6, 146, 116],
+      [14, 74, 46, 23, 75, 47],
+      [44, 54, 24, 7, 55, 25],
+      [59, 46, 16, 1, 47, 17],
+
+      // 35
+      [12, 151, 121, 7, 152, 122],
+      [12, 75, 47, 26, 76, 48],
+      [39, 54, 24, 14, 55, 25],
+      [22, 45, 15, 41, 46, 16],
+
+      // 36
+      [6, 151, 121, 14, 152, 122],
+      [6, 75, 47, 34, 76, 48],
+      [46, 54, 24, 10, 55, 25],
+      [2, 45, 15, 64, 46, 16],
+
+      // 37
+      [17, 152, 122, 4, 153, 123],
+      [29, 74, 46, 14, 75, 47],
+      [49, 54, 24, 10, 55, 25],
+      [24, 45, 15, 46, 46, 16],
+
+      // 38
+      [4, 152, 122, 18, 153, 123],
+      [13, 74, 46, 32, 75, 47],
+      [48, 54, 24, 14, 55, 25],
+      [42, 45, 15, 32, 46, 16],
+
+      // 39
+      [20, 147, 117, 4, 148, 118],
+      [40, 75, 47, 7, 76, 48],
+      [43, 54, 24, 22, 55, 25],
+      [10, 45, 15, 67, 46, 16],
+
+      // 40
+      [19, 148, 118, 6, 149, 119],
+      [18, 75, 47, 31, 76, 48],
+      [34, 54, 24, 34, 55, 25],
+      [20, 45, 15, 61, 46, 16]
+    ];
+
+    var qrRSBlock = function(totalCount, dataCount) {
+      var _this = {};
+      _this.totalCount = totalCount;
+      _this.dataCount = dataCount;
+      return _this;
+    };
+
+    var _this = {};
+
+    var getRsBlockTable = function(typeNumber, errorCorrectionLevel) {
+
+      switch(errorCorrectionLevel) {
+      case QRErrorCorrectionLevel.L :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 0];
+      case QRErrorCorrectionLevel.M :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 1];
+      case QRErrorCorrectionLevel.Q :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 2];
+      case QRErrorCorrectionLevel.H :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 3];
+      default :
+        return undefined;
+      }
+    };
+
+    _this.getRSBlocks = function(typeNumber, errorCorrectionLevel) {
+
+      var rsBlock = getRsBlockTable(typeNumber, errorCorrectionLevel);
+
+      if (typeof rsBlock == 'undefined') {
+        throw 'bad rs block @ typeNumber:' + typeNumber +
+            '/errorCorrectionLevel:' + errorCorrectionLevel;
+      }
+
+      var length = rsBlock.length / 3;
+
+      var list = [];
+
+      for (var i = 0; i < length; i += 1) {
+
+        var count = rsBlock[i * 3 + 0];
+        var totalCount = rsBlock[i * 3 + 1];
+        var dataCount = rsBlock[i * 3 + 2];
+
+        for (var j = 0; j < count; j += 1) {
+          list.push(qrRSBlock(totalCount, dataCount) );
+        }
+      }
+
+      return list;
+    };
+
+    return _this;
+  }();
+
+  //---------------------------------------------------------------------
+  // qrBitBuffer
+  //---------------------------------------------------------------------
+
+  var qrBitBuffer = function() {
+
+    var _buffer = [];
+    var _length = 0;
+
+    var _this = {};
+
+    _this.getBuffer = function() {
+      return _buffer;
+    };
+
+    _this.getAt = function(index) {
+      var bufIndex = Math.floor(index / 8);
+      return ( (_buffer[bufIndex] >>> (7 - index % 8) ) & 1) == 1;
+    };
+
+    _this.put = function(num, length) {
+      for (var i = 0; i < length; i += 1) {
+        _this.putBit( ( (num >>> (length - i - 1) ) & 1) == 1);
+      }
+    };
+
+    _this.getLengthInBits = function() {
+      return _length;
+    };
+
+    _this.putBit = function(bit) {
+
+      var bufIndex = Math.floor(_length / 8);
+      if (_buffer.length <= bufIndex) {
+        _buffer.push(0);
+      }
+
+      if (bit) {
+        _buffer[bufIndex] |= (0x80 >>> (_length % 8) );
+      }
+
+      _length += 1;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrNumber
+  //---------------------------------------------------------------------
+
+  var qrNumber = function(data) {
+
+    var _mode = QRMode.MODE_NUMBER;
+    var _data = data;
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return _data.length;
+    };
+
+    _this.write = function(buffer) {
+
+      var data = _data;
+
+      var i = 0;
+
+      while (i + 2 < data.length) {
+        buffer.put(strToNum(data.substring(i, i + 3) ), 10);
+        i += 3;
+      }
+
+      if (i < data.length) {
+        if (data.length - i == 1) {
+          buffer.put(strToNum(data.substring(i, i + 1) ), 4);
+        } else if (data.length - i == 2) {
+          buffer.put(strToNum(data.substring(i, i + 2) ), 7);
+        }
+      }
+    };
+
+    var strToNum = function(s) {
+      var num = 0;
+      for (var i = 0; i < s.length; i += 1) {
+        num = num * 10 + chatToNum(s.charAt(i) );
+      }
+      return num;
+    };
+
+    var chatToNum = function(c) {
+      if ('0' <= c && c <= '9') {
+        return c.charCodeAt(0) - '0'.charCodeAt(0);
+      }
+      throw 'illegal char :' + c;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrAlphaNum
+  //---------------------------------------------------------------------
+
+  var qrAlphaNum = function(data) {
+
+    var _mode = QRMode.MODE_ALPHA_NUM;
+    var _data = data;
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return _data.length;
+    };
+
+    _this.write = function(buffer) {
+
+      var s = _data;
+
+      var i = 0;
+
+      while (i + 1 < s.length) {
+        buffer.put(
+          getCode(s.charAt(i) ) * 45 +
+          getCode(s.charAt(i + 1) ), 11);
+        i += 2;
+      }
+
+      if (i < s.length) {
+        buffer.put(getCode(s.charAt(i) ), 6);
+      }
+    };
+
+    var getCode = function(c) {
+
+      if ('0' <= c && c <= '9') {
+        return c.charCodeAt(0) - '0'.charCodeAt(0);
+      } else if ('A' <= c && c <= 'Z') {
+        return c.charCodeAt(0) - 'A'.charCodeAt(0) + 10;
+      } else {
+        switch (c) {
+        case ' ' : return 36;
+        case '$' : return 37;
+        case '%' : return 38;
+        case '*' : return 39;
+        case '+' : return 40;
+        case '-' : return 41;
+        case '.' : return 42;
+        case '/' : return 43;
+        case ':' : return 44;
+        default :
+          throw 'illegal char :' + c;
+        }
+      }
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qr8BitByte
+  //---------------------------------------------------------------------
+
+  var qr8BitByte = function(data) {
+
+    var _mode = QRMode.MODE_8BIT_BYTE;
+    var _data = data;
+    var _bytes = qrcode.stringToBytes(data);
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return _bytes.length;
+    };
+
+    _this.write = function(buffer) {
+      for (var i = 0; i < _bytes.length; i += 1) {
+        buffer.put(_bytes[i], 8);
+      }
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrKanji
+  //---------------------------------------------------------------------
+
+  var qrKanji = function(data) {
+
+    var _mode = QRMode.MODE_KANJI;
+    var _data = data;
+
+    var stringToBytes = qrcode.stringToBytesFuncs['SJIS'];
+    if (!stringToBytes) {
+      throw 'sjis not supported.';
+    }
+    !function(c, code) {
+      // self test for sjis support.
+      var test = stringToBytes(c);
+      if (test.length != 2 || ( (test[0] << 8) | test[1]) != code) {
+        throw 'sjis not supported.';
+      }
+    }('\u53cb', 0x9746);
+
+    var _bytes = stringToBytes(data);
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return ~~(_bytes.length / 2);
+    };
+
+    _this.write = function(buffer) {
+
+      var data = _bytes;
+
+      var i = 0;
+
+      while (i + 1 < data.length) {
+
+        var c = ( (0xff & data[i]) << 8) | (0xff & data[i + 1]);
+
+        if (0x8140 <= c && c <= 0x9FFC) {
+          c -= 0x8140;
+        } else if (0xE040 <= c && c <= 0xEBBF) {
+          c -= 0xC140;
+        } else {
+          throw 'illegal char at ' + (i + 1) + '/' + c;
+        }
+
+        c = ( (c >>> 8) & 0xff) * 0xC0 + (c & 0xff);
+
+        buffer.put(c, 13);
+
+        i += 2;
+      }
+
+      if (i < data.length) {
+        throw 'illegal char at ' + (i + 1);
+      }
+    };
+
+    return _this;
+  };
+
+  //=====================================================================
+  // GIF Support etc.
+  //
+
+  //---------------------------------------------------------------------
+  // byteArrayOutputStream
+  //---------------------------------------------------------------------
+
+  var byteArrayOutputStream = function() {
+
+    var _bytes = [];
+
+    var _this = {};
+
+    _this.writeByte = function(b) {
+      _bytes.push(b & 0xff);
+    };
+
+    _this.writeShort = function(i) {
+      _this.writeByte(i);
+      _this.writeByte(i >>> 8);
+    };
+
+    _this.writeBytes = function(b, off, len) {
+      off = off || 0;
+      len = len || b.length;
+      for (var i = 0; i < len; i += 1) {
+        _this.writeByte(b[i + off]);
+      }
+    };
+
+    _this.writeString = function(s) {
+      for (var i = 0; i < s.length; i += 1) {
+        _this.writeByte(s.charCodeAt(i) );
+      }
+    };
+
+    _this.toByteArray = function() {
+      return _bytes;
+    };
+
+    _this.toString = function() {
+      var s = '';
+      s += '[';
+      for (var i = 0; i < _bytes.length; i += 1) {
+        if (i > 0) {
+          s += ',';
+        }
+        s += _bytes[i];
+      }
+      s += ']';
+      return s;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // base64EncodeOutputStream
+  //---------------------------------------------------------------------
+
+  var base64EncodeOutputStream = function() {
+
+    var _buffer = 0;
+    var _buflen = 0;
+    var _length = 0;
+    var _base64 = '';
+
+    var _this = {};
+
+    var writeEncoded = function(b) {
+      _base64 += String.fromCharCode(encode(b & 0x3f) );
+    };
+
+    var encode = function(n) {
+      if (n < 0) {
+        // error.
+      } else if (n < 26) {
+        return 0x41 + n;
+      } else if (n < 52) {
+        return 0x61 + (n - 26);
+      } else if (n < 62) {
+        return 0x30 + (n - 52);
+      } else if (n == 62) {
+        return 0x2b;
+      } else if (n == 63) {
+        return 0x2f;
+      }
+      throw 'n:' + n;
+    };
+
+    _this.writeByte = function(n) {
+
+      _buffer = (_buffer << 8) | (n & 0xff);
+      _buflen += 8;
+      _length += 1;
+
+      while (_buflen >= 6) {
+        writeEncoded(_buffer >>> (_buflen - 6) );
+        _buflen -= 6;
+      }
+    };
+
+    _this.flush = function() {
+
+      if (_buflen > 0) {
+        writeEncoded(_buffer << (6 - _buflen) );
+        _buffer = 0;
+        _buflen = 0;
+      }
+
+      if (_length % 3 != 0) {
+        // padding
+        var padlen = 3 - _length % 3;
+        for (var i = 0; i < padlen; i += 1) {
+          _base64 += '=';
+        }
+      }
+    };
+
+    _this.toString = function() {
+      return _base64;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // base64DecodeInputStream
+  //---------------------------------------------------------------------
+
+  var base64DecodeInputStream = function(str) {
+
+    var _str = str;
+    var _pos = 0;
+    var _buffer = 0;
+    var _buflen = 0;
+
+    var _this = {};
+
+    _this.read = function() {
+
+      while (_buflen < 8) {
+
+        if (_pos >= _str.length) {
+          if (_buflen == 0) {
+            return -1;
+          }
+          throw 'unexpected end of file./' + _buflen;
+        }
+
+        var c = _str.charAt(_pos);
+        _pos += 1;
+
+        if (c == '=') {
+          _buflen = 0;
+          return -1;
+        } else if (c.match(/^\s$/) ) {
+          // ignore if whitespace.
+          continue;
+        }
+
+        _buffer = (_buffer << 6) | decode(c.charCodeAt(0) );
+        _buflen += 6;
+      }
+
+      var n = (_buffer >>> (_buflen - 8) ) & 0xff;
+      _buflen -= 8;
+      return n;
+    };
+
+    var decode = function(c) {
+      if (0x41 <= c && c <= 0x5a) {
+        return c - 0x41;
+      } else if (0x61 <= c && c <= 0x7a) {
+        return c - 0x61 + 26;
+      } else if (0x30 <= c && c <= 0x39) {
+        return c - 0x30 + 52;
+      } else if (c == 0x2b) {
+        return 62;
+      } else if (c == 0x2f) {
+        return 63;
+      } else {
+        throw 'c:' + c;
+      }
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // gifImage (B/W)
+  //---------------------------------------------------------------------
+
+  var gifImage = function(width, height) {
+
+    var _width = width;
+    var _height = height;
+    var _data = new Array(width * height);
+
+    var _this = {};
+
+    _this.setPixel = function(x, y, pixel) {
+      _data[y * _width + x] = pixel;
+    };
+
+    _this.write = function(out) {
+
+      //---------------------------------
+      // GIF Signature
+
+      out.writeString('GIF87a');
+
+      //---------------------------------
+      // Screen Descriptor
+
+      out.writeShort(_width);
+      out.writeShort(_height);
+
+      out.writeByte(0x80); // 2bit
+      out.writeByte(0);
+      out.writeByte(0);
+
+      //---------------------------------
+      // Global Color Map
+
+      // black
+      out.writeByte(0x00);
+      out.writeByte(0x00);
+      out.writeByte(0x00);
+
+      // white
+      out.writeByte(0xff);
+      out.writeByte(0xff);
+      out.writeByte(0xff);
+
+      //---------------------------------
+      // Image Descriptor
+
+      out.writeString(',');
+      out.writeShort(0);
+      out.writeShort(0);
+      out.writeShort(_width);
+      out.writeShort(_height);
+      out.writeByte(0);
+
+      //---------------------------------
+      // Local Color Map
+
+      //---------------------------------
+      // Raster Data
+
+      var lzwMinCodeSize = 2;
+      var raster = getLZWRaster(lzwMinCodeSize);
+
+      out.writeByte(lzwMinCodeSize);
+
+      var offset = 0;
+
+      while (raster.length - offset > 255) {
+        out.writeByte(255);
+        out.writeBytes(raster, offset, 255);
+        offset += 255;
+      }
+
+      out.writeByte(raster.length - offset);
+      out.writeBytes(raster, offset, raster.length - offset);
+      out.writeByte(0x00);
+
+      //---------------------------------
+      // GIF Terminator
+      out.writeString(';');
+    };
+
+    var bitOutputStream = function(out) {
+
+      var _out = out;
+      var _bitLength = 0;
+      var _bitBuffer = 0;
+
+      var _this = {};
+
+      _this.write = function(data, length) {
+
+        if ( (data >>> length) != 0) {
+          throw 'length over';
+        }
+
+        while (_bitLength + length >= 8) {
+          _out.writeByte(0xff & ( (data << _bitLength) | _bitBuffer) );
+          length -= (8 - _bitLength);
+          data >>>= (8 - _bitLength);
+          _bitBuffer = 0;
+          _bitLength = 0;
+        }
+
+        _bitBuffer = (data << _bitLength) | _bitBuffer;
+        _bitLength = _bitLength + length;
+      };
+
+      _this.flush = function() {
+        if (_bitLength > 0) {
+          _out.writeByte(_bitBuffer);
+        }
+      };
+
+      return _this;
+    };
+
+    var getLZWRaster = function(lzwMinCodeSize) {
+
+      var clearCode = 1 << lzwMinCodeSize;
+      var endCode = (1 << lzwMinCodeSize) + 1;
+      var bitLength = lzwMinCodeSize + 1;
+
+      // Setup LZWTable
+      var table = lzwTable();
+
+      for (var i = 0; i < clearCode; i += 1) {
+        table.add(String.fromCharCode(i) );
+      }
+      table.add(String.fromCharCode(clearCode) );
+      table.add(String.fromCharCode(endCode) );
+
+      var byteOut = byteArrayOutputStream();
+      var bitOut = bitOutputStream(byteOut);
+
+      // clear code
+      bitOut.write(clearCode, bitLength);
+
+      var dataIndex = 0;
+
+      var s = String.fromCharCode(_data[dataIndex]);
+      dataIndex += 1;
+
+      while (dataIndex < _data.length) {
+
+        var c = String.fromCharCode(_data[dataIndex]);
+        dataIndex += 1;
+
+        if (table.contains(s + c) ) {
+
+          s = s + c;
+
+        } else {
+
+          bitOut.write(table.indexOf(s), bitLength);
+
+          if (table.size() < 0xfff) {
+
+            if (table.size() == (1 << bitLength) ) {
+              bitLength += 1;
+            }
+
+            table.add(s + c);
+          }
+
+          s = c;
+        }
+      }
+
+      bitOut.write(table.indexOf(s), bitLength);
+
+      // end code
+      bitOut.write(endCode, bitLength);
+
+      bitOut.flush();
+
+      return byteOut.toByteArray();
+    };
+
+    var lzwTable = function() {
+
+      var _map = {};
+      var _size = 0;
+
+      var _this = {};
+
+      _this.add = function(key) {
+        if (_this.contains(key) ) {
+          throw 'dup key:' + key;
+        }
+        _map[key] = _size;
+        _size += 1;
+      };
+
+      _this.size = function() {
+        return _size;
+      };
+
+      _this.indexOf = function(key) {
+        return _map[key];
+      };
+
+      _this.contains = function(key) {
+        return typeof _map[key] != 'undefined';
+      };
+
+      return _this;
+    };
+
+    return _this;
+  };
+
+  var createDataURL = function(width, height, getPixel) {
+    var gif = gifImage(width, height);
+    for (var y = 0; y < height; y += 1) {
+      for (var x = 0; x < width; x += 1) {
+        gif.setPixel(x, y, getPixel(x, y) );
+      }
+    }
+
+    var b = byteArrayOutputStream();
+    gif.write(b);
+
+    var base64 = base64EncodeOutputStream();
+    var bytes = b.toByteArray();
+    for (var i = 0; i < bytes.length; i += 1) {
+      base64.writeByte(bytes[i]);
+    }
+    base64.flush();
+
+    return 'data:image/gif;base64,' + base64;
+  };
+
+  //---------------------------------------------------------------------
+  // returns qrcode function.
+
+  return qrcode;
+}();
+
+// multibyte support
+!function() {
+
+  qrcode.stringToBytesFuncs['UTF-8'] = function(s) {
+    // http://stackoverflow.com/questions/18729405/how-to-convert-utf8-string-to-byte-array
+    function toUTF8Array(str) {
+      var utf8 = [];
+      for (var i=0; i < str.length; i++) {
+        var charcode = str.charCodeAt(i);
+        if (charcode < 0x80) utf8.push(charcode);
+        else if (charcode < 0x800) {
+          utf8.push(0xc0 | (charcode >> 6),
+              0x80 | (charcode & 0x3f));
+        }
+        else if (charcode < 0xd800 || charcode >= 0xe000) {
+          utf8.push(0xe0 | (charcode >> 12),
+              0x80 | ((charcode>>6) & 0x3f),
+              0x80 | (charcode & 0x3f));
+        }
+        // surrogate pair
+        else {
+          i++;
+          // UTF-16 encodes 0x10000-0x10FFFF by
+          // subtracting 0x10000 and splitting the
+          // 20 bits of 0x0-0xFFFFF into two halves
+          charcode = 0x10000 + (((charcode & 0x3ff)<<10)
+            | (str.charCodeAt(i) & 0x3ff));
+          utf8.push(0xf0 | (charcode >>18),
+              0x80 | ((charcode>>12) & 0x3f),
+              0x80 | ((charcode>>6) & 0x3f),
+              0x80 | (charcode & 0x3f));
+        }
+      }
+      return utf8;
+    }
+    return toUTF8Array(s);
+  };
+
+}();
+
+(function (factory) {
+  if (typeof define === 'function' && define.amd) {
+      define([], factory);
+  } else if (typeof exports === 'object') {
+      module.exports = factory();
+  }
+}(function () {
+    return qrcode;
+}));
+
+</script>
+<style>
+:root{
+  --bg:#F3F6FC; --surface:#FFFFFF; --ink:#16203A; --muted:#5A6580; --line:#D8E0F0;
+  --blue:#1D4CA8; --red:#D7262E; --teal:#0F7C78; --gold:#C98A0B;
+  --ok:#1E8A4C; --bad:#C2272F; --okbg:#E4F4EA; --badbg:#FBE7E8; --on:#FFFFFF;
+  color-scheme: light; box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){ :root{
+  --bg:#0E1424; --surface:#172038; --ink:#ECF0FA; --muted:#A3AEC8; --line:#2A3654;
+  --blue:#4A78D6; --red:#E2474E; --teal:#2A9D97; --gold:#D9A12E;
+  --ok:#4CC27E; --bad:#F06A70; --okbg:#173A28; --badbg:#3F1C21; color-scheme: dark; } }
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%}
+body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font-family:"Golos Text",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:17px;line-height:1.5}
+h1,h2,.display{font-family:"Unbounded","Golos Text",system-ui,sans-serif;font-weight:700;letter-spacing:-.01em;margin:0}
+.wrap{max-width:560px;margin:0 auto;padding:20px 18px 32px}
+.wide{max-width:1180px}
+.marks{font-family:"Unbounded",system-ui,sans-serif;font-size:52px;line-height:1;color:var(--blue);display:flex;gap:6px;margin:10px 0 6px}
+.marks span:nth-child(2){color:var(--red)} .marks span:nth-child(3){color:var(--teal)} .marks span:nth-child(4){color:var(--gold)}
+.lede{color:var(--muted);margin:6px 0 22px}
+.btn{display:block;width:100%;font:inherit;font-weight:600;font-size:18px;padding:16px;border-radius:16px;border:0;background:var(--ink);color:var(--bg);cursor:pointer;margin-top:12px}
+.btn.alt{background:var(--surface);color:var(--ink);border:2px solid var(--line)}
+.btn:disabled{opacity:.45;cursor:default}
+label{display:block;font-weight:600;margin:16px 0 6px}
+input[type=text],input[type=tel],select{width:100%;font:inherit;padding:14px 16px;border-radius:14px;border:2px solid var(--line);background:var(--surface);color:var(--ink)}
+input:focus,select:focus{outline:none;border-color:var(--blue)}
+.pin-in{font-family:"Unbounded",system-ui,sans-serif;font-size:30px;letter-spacing:.2em;text-align:center}
+.err{color:var(--bad);min-height:22px;font-size:15px;margin:8px 0 0}
+.card{background:var(--surface);border:2px solid var(--line);border-radius:18px;padding:16px 18px}
+[hidden]{display:none !important}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+
+/* host lobby */
+.lobby{display:grid;grid-template-columns:auto 1fr;gap:28px;align-items:start;margin-top:18px}
+@media (max-width:760px){.lobby{grid-template-columns:1fr}}
+.qrbox img{display:block;width:280px;height:280px;image-rendering:pixelated}
+.qrbox{background:#fff;padding:10px;border-radius:18px;display:inline-block;border:2px solid var(--line)}
+.join-url{font-size:15px;color:var(--muted);word-break:break-all;margin-top:10px;max-width:280px}
+.bigpin{font-family:"Unbounded",system-ui,sans-serif;font-size:clamp(44px,8vw,88px);letter-spacing:.08em;color:var(--blue);line-height:1}
+.players{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.chip{background:var(--surface);border:2px solid var(--line);border-radius:999px;padding:6px 14px;font-weight:600}
+.chip.off{opacity:.4}
+
+/* host question */
+.hq-top{display:flex;justify-content:space-between;align-items:center;gap:12px;color:var(--muted);font-size:18px}
+.timer{font-family:"Unbounded",system-ui,sans-serif;font-size:44px;color:var(--ink);width:96px;height:96px;border-radius:50%;display:grid;place-items:center;border:6px solid var(--blue)}
+.hq-text{font-size:clamp(26px,3.6vw,46px);font-weight:600;line-height:1.25;margin:20px 0 26px;text-align:center}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.tile{display:flex;align-items:center;gap:16px;min-height:96px;border-radius:18px;padding:16px 20px;color:var(--on);font-size:clamp(20px,2.4vw,30px);font-weight:600}
+.tile .sym{font-family:"Unbounded",system-ui,sans-serif;font-size:34px;width:44px;text-align:center;flex:none}
+.tile .cnt{margin-left:auto;font-family:"Unbounded",system-ui,sans-serif;font-size:26px}
+.a0{background:var(--blue)} .a1{background:var(--red)} .a2{background:var(--teal)} .a3{background:var(--gold)}
+.tile.dim{opacity:.25} .tile.right{box-shadow:0 0 0 6px var(--ok)}
+.hint-row{display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:12px;flex-wrap:wrap}
+.expl{background:var(--okbg);border-radius:16px;padding:14px 18px;margin-top:18px;font-size:20px}
+.board{list-style:none;padding:0;margin:14px 0 0;display:grid;gap:8px;counter-reset:r}
+.board li{display:flex;align-items:center;gap:14px;background:var(--surface);border:2px solid var(--line);border-radius:14px;padding:10px 16px;font-size:20px;font-weight:600}
+.board li::before{counter-increment:r;content:counter(r);font-family:"Unbounded",system-ui,sans-serif;color:var(--blue);width:30px}
+.board li span:last-child{margin-left:auto;font-family:"Unbounded",system-ui,sans-serif}
+.podium{display:flex;justify-content:center;align-items:flex-end;gap:14px;margin:26px 0}
+.pod{text-align:center;width:min(30%,220px)}
+.pod .bar{border-radius:14px 14px 0 0;color:var(--on);font-family:"Unbounded",system-ui,sans-serif;font-size:40px;display:grid;place-items:center}
+.pod .nm{font-weight:700;font-size:20px;margin-bottom:6px;word-break:break-word}
+.pod .pt{color:var(--muted);font-size:16px}
+table{width:100%;border-collapse:collapse;font-size:16px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:600}
+.tablewrap{overflow-x:auto}
+
+/* player */
+.p-answers{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+.p-btn{min-height:120px;border:0;border-radius:18px;color:var(--on);font:inherit;font-size:18px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:10px;text-align:center}
+.p-btn .sym{font-family:"Unbounded",system-ui,sans-serif;font-size:34px;line-height:1}
+.p-btn:active{transform:scale(.97)}
+.p-btn:disabled{opacity:.35}
+.p-q{font-size:20px;font-weight:600;line-height:1.35;margin:12px 0 0}
+.p-top{display:flex;justify-content:space-between;color:var(--muted);font-size:15px}
+.big-state{text-align:center;padding:40px 10px}
+.big-state .icon{font-size:64px}
+.big-state h2{font-size:28px;margin:10px 0 6px}
+.good h2{color:var(--ok)} .bad h2{color:var(--bad)}
+.pts{font-family:"Unbounded",system-ui,sans-serif;font-size:40px}
+@media (prefers-reduced-motion: reduce){*{transition:none !important;animation:none !important}}
+</style>
+</head>
+<body>
+<!-- HOME -->
+<main class="wrap" id="home">
+  <div class="marks" aria-hidden="true"><span>á</span><span>ä</span><span>ô</span><span>č</span></div>
+  <h1>Krížom-krážom: hra</h1>
+  <p class="lede">Гра для всієї групи одночасно: вчитель показує екран, учні відповідають з телефонів.</p>
+  <button class="btn" id="goJoin">Som študent · Pripojiť sa</button>
+  <button class="btn alt" id="goHost">Som učiteľka · Vytvoriť hru</button>
+</main>
+
+<!-- PLAYER JOIN -->
+<main class="wrap" id="pJoin" hidden>
+  <h1>Pripojiť sa</h1>
+  <p class="lede">Введи PIN з екрана вчителя та своє ім'я.</p>
+  <label for="pinIn">PIN</label>
+  <input id="pinIn" class="pin-in" type="tel" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="000000">
+  <label for="nameIn">Tvoje meno</label>
+  <input id="nameIn" type="text" maxlength="24" autocomplete="given-name" placeholder="Наприклад, Олена">
+  <p class="err" id="joinErr" role="alert"></p>
+  <button class="btn" id="joinBtn">Hrať!</button>
+</main>
+
+<!-- PLAYER GAME -->
+<main class="wrap" id="pGame" hidden>
+  <div class="p-top"><span id="pName"></span><span id="pScore">0 b.</span></div>
+  <div id="pWait" class="big-state"><div class="icon">⏳</div><h2>Si v hre!</h2><p class="lede">Чекай, поки вчитель почне гру.</p></div>
+  <div id="pQ" hidden>
+    <div class="p-top"><span id="pCounter"></span><span id="pTime"></span></div>
+    <p class="p-q" id="pQText"></p>
+    <div class="p-answers" id="pAnswers"></div>
+  </div>
+  <div id="pSent" class="big-state" hidden><div class="icon">✋</div><h2>Odpoveď odoslaná</h2><p class="lede">Чекаємо на інших…</p></div>
+  <div id="pRes" class="big-state" hidden><div class="icon" id="pResIcon"></div><h2 id="pResTitle"></h2><div class="pts" id="pResPts"></div><p class="lede" id="pResText"></p></div>
+  <div id="pEnd" class="big-state" hidden><div class="icon">🏁</div><h2>Koniec hry!</h2><div class="pts" id="pEndRank"></div><p class="lede" id="pEndText"></p></div>
+  <p class="err" id="pErr" role="alert"></p>
+</main>
+
+<!-- HOST SETUP -->
+<main class="wrap" id="hSetup" hidden>
+  <h1>Nová hra</h1>
+  <p class="lede">Обери книгу, лекцію та тест.</p>
+  <label for="bookSel">Kniha</label>
+  <select id="bookSel"><option value="A1">Slovenčina A1</option><option value="A2">Slovenčina A2</option></select>
+  <label for="lessonSel">Lekcia</label>
+  <select id="lessonSel"></select>
+  <label for="testSel">Test</label>
+  <select id="testSel"></select>
+  <label for="timeSel">Čas na otázku</label>
+  <select id="timeSel"><option value="15">15 s</option><option value="20" selected>20 s</option><option value="30">30 s</option></select>
+  <p class="err" id="hostErr" role="alert"></p>
+  <button class="btn" id="createBtn">Vytvoriť hru</button>
+</main>
+
+<!-- HOST LOBBY -->
+<main class="wrap wide" id="hLobby" hidden>
+  <h2 id="lobbyTitle"></h2>
+  <div class="lobby">
+    <div><div class="qrbox" id="qr"></div><div class="join-url" id="joinUrl"></div><p class="err" id="localWarn" hidden style="max-width:300px"></p></div>
+    <div>
+      <div class="lede" style="margin:0">PIN hry</div>
+      <div class="bigpin" id="bigPin">——————</div>
+      <p class="lede">Скануйте QR-код або відкрийте сторінку й введіть PIN.</p>
+      <div class="display" style="font-size:20px">Hráči: <span id="pCount">0</span></div>
+      <div class="players" id="playerChips"></div>
+      <button class="btn" id="startBtn" disabled style="max-width:360px">Začať hru ▶</button>
+    </div>
+  </div>
+</main>
+
+<!-- HOST QUESTION -->
+<main class="wrap wide" id="hQ" hidden>
+  <div class="hq-top"><span id="hCounter"></span><div class="timer" id="hTimer">20</div><span id="hAnswered"></span></div>
+  <p class="hq-text" id="hQText"></p>
+  <div class="tiles" id="hTiles"></div>
+  <div id="hReveal" hidden>
+    <div class="expl" id="hExpl"></div>
+    <div class="display" style="font-size:22px;margin-top:22px">Poradie</div>
+    <ol class="board" id="hBoard"></ol>
+  </div>
+  <div class="hint-row"><span class="lede" style="margin:0" id="hHint"></span><button class="btn" id="hNext" style="width:auto;padding:14px 28px;margin:0">Ukázať odpoveď</button></div>
+</main>
+
+<!-- HOST END -->
+<main class="wrap wide" id="hEnd" hidden>
+  <h1>Výsledky 🎉</h1>
+  <p class="lede" id="endTitle"></p>
+  <div class="podium" id="podium"></div>
+  <div class="card tablewrap"><table><thead><tr><th>#</th><th>Meno</th><th>Body</th><th>Správne</th><th>%</th></tr></thead><tbody id="resBody"></tbody></table></div>
+  <button class="btn" id="csvBtn" style="max-width:360px">Stiahnuť výsledky (CSV)</button>
+  <button class="btn alt" id="copyBtn" style="max-width:360px">Kopírovať výsledky</button>
+  <button class="btn alt" id="newGame" style="max-width:360px">Nová hra</button>
+</main>
+
+<script>
+const LESSONS = [
+{n:1, title:"Vitajte na Slovensku!", tests:[
+ {title:"Frázy", desc:"Привітання, ввічливі фрази, знайомство", q:[
+  ["Ráno stretneš pána profesora. Čo povieš?", ["Dobré ráno, pán profesor.","Dobrú noc, pán profesor.","Na zdravie, pán profesor.","Čau, pán profesor."], "«Dobré ráno» вживаємо зранку. «Čau» тільки для друзів."],
+  ["Kamarát kýchne. Čo povieš?", ["Na zdravie!","Nech sa páči.","Dobrú chuť!","Teší ma."], "Коли хтось чхає, кажемо «Na zdravie!». Так само кажуть, коли цокаються."],
+  ["Dávaš niekomu knihu. Čo povieš?", ["Nech sa páči.","Ďakujem.","Prepáčte.","Dovidenia."], "«Nech sa páči» означає «прошу», коли щось даємо."],
+  ["Niekto ti hovorí „Prepáčte!“. Ako odpovieš?", ["Nič sa nestalo.","Aj vám.","Teší ma.","Na zdravie!"], "«Nič sa nestalo» означає «нічого страшного»."],
+  ["Pani profesorka ti hovorí „Dobrú chuť!“. Ako odpovieš?", ["Ďakujem. Aj vám.","Nič sa nestalo.","Volám sa Zuzana.","Mám sa zle."], "На «Dobrú chuť!» відповідаємо «Ďakujem. Aj vám.»."],
+  ["„Ako sa voláte?“", ["Volám sa Carlo Biagiotti.","Mám sa výborne.","Mám 28 rokov.","Áno, ďakujem."], "«Ako sa voláte?» означає «Як вас звати?»."],
+  ["„Ako sa máš?“", ["Mám sa dobre.","Volám sa Róbert.","Aj mňa.","Dovidenia."], "«Ako sa máš?» означає «Як справи?»."],
+  ["„Koľko máš rokov?“", ["Mám 21 rokov.","Mám sa dobre.","Som zo Slovenska.","Nech sa páči."], "«Koľko máš rokov?» означає «Скільки тобі років?»."],
+  ["„Teší ma.“ Ako odpovieš?", ["Aj mňa.","Aj tebe.","Nič sa nestalo.","Ďakujem, dobre."], "«Teší ma» означає «приємно познайомитися». Відповідь: «Aj mňa»."],
+  ["Večer ideš spať. Čo povieš mame?", ["Dobrú noc.","Dobré ráno.","Dobrý deň.","Ahojte."], "«Dobrú noc» означає «на добраніч»."],
+  ["Ako pozdravíš skupinu kamarátov?", ["Ahojte!","Dobrý večer, pani profesorka.","Dovidenia, pán profesor.","Dobrú chuť!"], "«Ahojte» до кількох друзів, «Ahoj» до одного."],
+  ["Ospravedlňuješ sa profesorovi. Čo povieš?", ["Prepáčte!","Prepáč!","Čau!","Ahoj!"], "«Prepáčte» ввічлива форма (на «ви»), «Prepáč» на «ти»."],
+  ["Končíš rozhovor po telefóne. Čo povieš?", ["Dopočutia.","Dobrú chuť.","Teší ma.","Na zdravie."], "«Dopočutia» прощання телефоном."],
+  ["Robo ti hovorí „Pekný deň!“. Ako odpovieš?", ["Aj tebe.","Aj mňa.","Prepáč.","Nech sa páči."], "На «Pekný deň!» відповідаємо «Aj tebe»."],
+  ["Odchádzaš z obchodu. Čo povieš predavačke?", ["Dovidenia.","Čau.","Ahoj.","Na zdravie."], "«Dovidenia» ввічливе прощання."]
+ ]},
+ {title:"Abeceda a výslovnosť", desc:"Голосні, дифтонги, приголосні, вимова", q:[
+  ["Ktoré vokály sú dlhé?", ["á, é, í, ó, ú","a, e, i, o, u","ä, ô, ia, ie","y, i, ý, í"], "Довгі голосні мають знак «dĺžeň»."],
+  ["Ako sa vyslovuje „ä“?", ["[e]","[a]","[ia]","[u]"], "«ä» читаємо як [e]: päť [peť]."],
+  ["Ako sa vyslovuje slovo „deväť“?", ["[ďeveť]","[deveť]","[ďeväť]","[deviať]"], "«ä» як [e], а «de» м'яко: [ďeveť]."],
+  ["„y“ a „i“ sa vyslovujú…", ["rovnako, ako [i]","rôzne","ako [ы]","ako [j]"], "«y» та «i» звучать однаково [i]."],
+  ["Ako sa vyslovuje „ô“?", ["[uo]","[o]","[ó]","[u]"], "«ô» це дифтонг [uo]: stôl."],
+  ["Ktoré slovo má diftong?", ["čierny","dom","káva","syr"], "Дифтонги: ia, ie, iu, ô. У «čierny» є «ie»."],
+  ["„rad“ a „rád“. Mení dĺžka význam slova?", ["Áno, sú to rôzne slová.","Nie, je to to isté slovo.","Len v písaní.","Len v otázke."], "Довжина змінює значення: rad (ряд), rád (радий)."],
+  ["Ako sa vyslovuje „teplo“?", ["[ťeplo]","[teplo]","[tieplo]","[tyeplo]"], "У словацьких словах de, te, ne, le звучать м'яко."],
+  ["Ako sa vyslovuje „telefón“?", ["[telefón]","[ťelefón]","[ťeľefón]","[tieľefón]"], "У запозичених словах te, de, ne, le тверді."],
+  ["Ako sa vyslovuje „ten“?", ["[ten]","[ťeň]","[ťen]","[tien]"], "Винятки звучать твердо: ten, tej, teraz, jeden."],
+  ["Ako znie „v“ na konci slova „dav“?", ["[u]","[v]","[f]","[b]"], "У кінці складу «v» звучить як [u]."],
+  ["Ako znie „v“ v slove „voda“?", ["[v]","[u]","[f]","[w]"], "Перед голосною «v» звучить як [v]."],
+  ["Ktoré písmeno je mäkká spoluhláska?", ["ť","t","k","h"], "М'які приголосні: ď, ť, ň, ľ."],
+  ["Na ktorej slabike je v slovenčine prízvuk?", ["Vždy na prvej.","Vždy na poslednej.","Na dlhej slabike.","Na druhej."], "Наголос завжди на першому складі."],
+  ["Ktoré písmeno je v slovenskej abecede jedno písmeno?", ["ch","sh","th","ck"], "«ch», dz, dž в абетці вважаються однією літерою."]
+ ]}
+]},
+{n:2, title:"Ahoj. Ja som Johanna.", tests:[
+ {title:"Krajiny a kto je kto", desc:"Odkiaľ ste?, krajiny, знайомство", q:[
+  ["„Odkiaľ ste?“", ["Som z Nemecka.","Volám sa Johanna.","Študujem dizajn.","Mám sa dobre."], "«Odkiaľ ste?» означає «Звідки ви?»."],
+  ["Ktorá otázka je neformálna?", ["Odkiaľ si?","Odkiaľ ste?","Ako sa voláte?","Čo študujete?"], "На «ти»: si, voláš; на «ви»: ste, voláte."],
+  ["„Čo robíš?“", ["Študujem dizajn.","Som zo Slovenska.","Mám sa výborne.","Teší ma."], "«Čo robíš?» означає «Чим займаєшся?»."],
+  ["Johanna je z…", ["Nemecka.","Talianska.","Slovenska.","Anglicka."], "Johanna Mark з Німеччини."],
+  ["Carlo Biagiotti je z…", ["Talianska.","Nemecka.","Francúzska.","Slovenska."], "Carlo з Італії."],
+  ["„Toto je môj brat Róbert.“ Kto to hovorí?", ["Zuzana","Johanna","Carlo","úradníčka"], "Róbert Šoltýs — брат Zuzany Šoltýsovej."],
+  ["Čo znamená „spolubývajúca“?", ["сусідка по кімнаті","сестра","однокурсниця","вчителька"], "Spolubývajúca живе з тобою в одній кімнаті."],
+  ["„Pracujem ako lekár.“", ["Я працюю лікарем.","Я вчуся на лікаря.","Я йду до лікаря.","Мій брат лікар."], "Pracovať ako… означає «працювати ким»."],
+  ["„Študujete po slovensky?“", ["Nie, študujem po anglicky.","Áno, som zo Slovenska.","Nie, volám sa Johanna.","Áno, mám sa dobre."], "«Po slovensky / po anglicky» означає «словацькою / англійською»."],
+  ["Som zo…", ["Slovenska.","Slovensko.","Slovensku.","Slovenskom."], "Після «z / zo» країна в родовому відмінку: zo Slovenska."],
+  ["„Kto je to?“", ["To je Zuzana.","Áno, je.","Som z Nemecka.","Je to stôl."], "«Kto je to?» означає «Хто це?»."],
+  ["Pýtaš sa úradníčky na meno:", ["Ako sa voláte?","Ako sa voláš?","Kto si?","Odkiaľ si?"], "З незнайомими та офіційно говоримо на «ви»."]
+ ]},
+ {title:"Gramatika", desc:"Zámená, rod, slovesá, byť, negácia, čísla", q:[
+  ["Ja ___ študentka.", ["som","si","je","sme"], "byť: ja som, ty si, on je."],
+  ["Ty ___ Zuzana?", ["si","som","ste","sú"], "ty si."],
+  ["My ___ zo Slovenska.", ["sme","ste","sú","som"], "my sme, vy ste, oni sú."],
+  ["Oni ___ študenti.", ["sú","je","sme","ste"], "oni sú."],
+  ["Johanna ___ zo Slovenska.", ["nie je","nie som","neje","nie sú"], "Заперечення byť: nie som, nie si, nie je."],
+  ["ja (študovať)", ["študujem","študuješ","študuje","študovám"], "študovať: študujem, študuješ, študuje."],
+  ["vy (hovoriť)", ["hovoríte","hovoríš","hovoria","hovorím"], "hovoriť: hovorím, hovoríš, hovorí, hovoríme, hovoríte, hovoria."],
+  ["oni (rozumieť)", ["rozumejú","rozumie","rozumieme","rozumiete"], "rozumieť: oni rozumejú."],
+  ["Zápor od „hovorím“:", ["nehovorím","nie hovorím","ne hovorím","hovorím nie"], "Заперечення дієслів пишемо разом: nehovorím."],
+  ["Aký rod má slovo „mesto“?", ["stredný","mužský","ženský","nemá rod"], "Слова на -o зазвичай середнього роду."],
+  ["Aký rod má slovo „kniha“?", ["ženský","mužský","stredný","nemá rod"], "Слова на -a зазвичай жіночого роду."],
+  ["15 =", ["pätnásť","päťdesiat","päť","pätnásty"], "15 pätnásť, 50 päťdesiat."]
+ ]}
+]},
+{n:3, title:"Internát", tests:[
+ {title:"Interiér a orientácia", desc:"Дім, кімната, офіс, протилежності", q:[
+  ["Opak slova „starý“ (internát):", ["nový","malý","pekný","pomalý"], "starý ↔ nový."],
+  ["Opak slova „veľký“:", ["malý","nový","dobrý","pekný"], "veľký ↔ malý."],
+  ["Kde je chladnička?", ["v kuchyni","v kúpeľni","na balkóne","v skrini"], "Chladnička (холодильник) стоїть на кухні."],
+  ["Čo je „práčka“?", ["пральна машина","холодильник","шафа","ліжко"], "Práčka перe одяг."],
+  ["Čo je „skriňa“?", ["шафа","полиця","стілець","лампа"], "Skriňa — шафа."],
+  ["Čo je „posteľ“?", ["ліжко","полиця","лампа","стіл"], "Posteľ — ліжко."],
+  ["Opak slova „vpredu“:", ["vzadu","vľavo","vpravo","dole"], "vpredu ↔ vzadu."],
+  ["Opak slova „vľavo“:", ["vpravo","vpredu","hore","vzadu"], "vľavo ↔ vpravo."],
+  ["Opak slova „dole“:", ["hore","vzadu","vľavo","vonku"], "dole ↔ hore."],
+  ["„Mobil je vybitý.“", ["Телефон розряджений.","Телефон вимкнений.","Телефон зламаний.","Телефон новий."], "vybitý — розряджений, vypnutý — вимкнений."],
+  ["„Kopírka je pokazená.“", ["Копір зламаний.","Копір новий.","Копір повільний.","Копір вимкнений."], "pokazený — зламаний."],
+  ["Opak slova „pomalý“ (počítač):", ["rýchly","starý","zlý","veľký"], "pomalý ↔ rýchly."]
+ ]},
+ {title:"Gramatika", desc:"Прикметники, присвійні займенники, čí? aký? ktorý?", q:[
+  ["___ izba je pekná. (ja)", ["Moja","Môj","Moje","Mojej"], "izba (ж. р.) → moja."],
+  ["To je ___ stôl. (ja)", ["môj","moja","moje","mojej"], "stôl (ч. р.) → môj."],
+  ["To je ___ mobil? (ty)", ["tvoj","tvoja","tvoje","tvojho"], "mobil (ч. р.) → tvoj."],
+  ["___ je to mobil? — Róbertov.", ["Čí","Aký","Ktorý","Kto"], "Čí? — чий? Питаємо про власника."],
+  ["mobil, ktorý má Róbert =", ["Róbertov mobil","Róbertova mobil","Róbertove mobil","Róbertovi mobil"], "Присвійний прикметник ч. р.: Róbertov."],
+  ["izba, ktorú má Zuzana =", ["Zuzanina izba","Zuzanin izba","Zuzanino izba","Zuzanova izba"], "Від жіночого імені: Zuzanin, Zuzanina, Zuzanino."],
+  ["kancelária, ktorú má Carlo =", ["Carlova kancelária","Carlov kancelária","Carlovo kancelária","Carlina kancelária"], "kancelária (ж. р.) → Carlova."],
+  ["___ kuchyňa (nový)", ["nová","nový","nové","novej"], "Ж. р.: nová."],
+  ["___ okno (veľký)", ["veľké","veľký","veľká","veľkí"], "С. р.: veľké."],
+  ["___ balkón (malý)", ["malý","malá","malé","malého"], "Ч. р.: malý."],
+  ["___ je kúpeľňa? — Kúpeľňa je nová.", ["Aká","Aký","Aké","Čia"], "Aký? aká? aké? — який? (ознака)."],
+  ["___ posteľ je moja? — Táto.", ["Ktorá","Ktorý","Ktoré","Čia"], "Ktorý? ktorá? ktoré? — котрий? (вибір)."]
+ ]}
+]},
+{n:4, title:"Mestá a miesta", tests:[
+ {title:"Mesto a profesie", desc:"Місто, місця, професії", q:[
+  ["Hlavné mesto Slovenska je…", ["Bratislava","Košice","Poprad","Žilina"], "Bratislava — столиця Словаччини."],
+  ["V Bratislave nie je…", ["metro","električka","autobus","trolejbus"], "У Братиславі немає метро."],
+  ["Historické centrum Bratislavy sa volá…", ["Staré mesto","Nové mesto","Hlavné mesto","Malé mesto"], "Staré mesto — історичний центр."],
+  ["Kde pozeráme film?", ["v kine","v divadle","v kaviarni","v kostole"], "Kino — кінотеатр."],
+  ["Kde pijeme kávu?", ["v kaviarni","v kine","na pošte","v knižnici"], "Kaviareň — кав'ярня."],
+  ["Lekár pracuje v…", ["nemocnici","škole","reštaurácii","banke"], "Nemocnica — лікарня."],
+  ["Čašník pracuje v…", ["reštaurácii","nemocnici","škole","hoteli na recepcii"], "Čašník — офіціант."],
+  ["Kto predáva v obchode?", ["predavač","lekár","učiteľ","vodič"], "Predavač / predavačka — продавець."],
+  ["Kde žijú Zuzanini rodičia?", ["v Poprade","v Bratislave","v Berlíne","v Levoči"], "Zuzanini rodičia žijú v Poprade."],
+  ["Čo je „pohľadnica“?", ["листівка","марка","конверт","лист"], "Pohľadnica — листівка."],
+  ["Čo je „známka“?", ["поштова марка","листівка","адреса","посилка"], "Známka — поштова марка."],
+  ["Čo je „dedina“?", ["село","місто","площа","столиця"], "Dedina — село."]
+ ]},
+ {title:"Gramatika", desc:"Множина, прикметники, 2, 3, 4, stáť", q:[
+  ["mesto → plurál", ["mestá","mesty","mestov","mesti"], "Середній рід на -o: mesto → mestá."],
+  ["kaviareň → plurál", ["kaviarne","kaviarni","kaviarňa","kaviarňe"], "kaviareň → kaviarne."],
+  ["hotel → plurál", ["hotely","hoteli","hotelá","hotele"], "Неістоти ч. р.: hotel → hotely."],
+  ["kamarát → plurál", ["kamaráti","kamaráty","kamarátá","kamarátov"], "Особи ч. р.: kamarát → kamaráti."],
+  ["Kaviarne sú ___. (drahý)", ["drahé","drahý","drahá","drahí"], "Kaviarne sú drahé."],
+  ["Kamaráti sú ___. (milý)", ["milí","milé","milý","milá"], "Для осіб ч. р. у множині: milí."],
+  ["___ kamaráti (2)", ["dvaja","dve","dva","dvoch"], "Для чоловіків: dvaja kamaráti."],
+  ["___ pohľadnice (2)", ["dve","dva","dvaja","dvoje"], "Для ж. і с. р.: dve."],
+  ["___ autobusy (2)", ["dva","dve","dvaja","dvoch"], "Для неістот ч. р.: dva."],
+  ["Ktoré slovo má iba plurál?", ["dvere","stôl","mesto","kniha"], "Pluralia tantum: dvere, nohavice, noviny, Vianoce."],
+  ["Koľko ___ známka?", ["stojí","stoja","stojím","stoje"], "stáť: ono stojí, oni stoja."],
+  ["Známky ___ 21 korún.", ["stoja","stojí","stojíme","stojíte"], "oni stoja."]
+ ]}
+]},
+{n:5, title:"Dnes máme oslavu.", tests:[
+ {title:"Nakupovanie a farby", desc:"Покупки, магазини, кольори", q:[
+  ["Kde kúpiš mydlo a šampón?", ["v drogérii","v elektre","v pekárni","v kníhkupectve"], "Drogéria — магазин побутової хімії."],
+  ["Kde kúpiš batérie a myš?", ["v elektre","v drogérii","v potravinách","v lekárni"], "Elektro — магазин техніки."],
+  ["Čo potrebujeme na chlebíčky?", ["chlieb, šunku, syr","mydlo, šampón","batérie, myš","servítky, sviečky"], "Chlebíčky — бутерброди."],
+  ["Čo sú „sviečky“?", ["свічки","серветки","цукерки","кульки"], "Sviečky na tortu — свічки на торт."],
+  ["Opak slova „svetlý“:", ["tmavý","biely","farebný","zelený"], "svetlý ↔ tmavý."],
+  ["Akú farbu má citrón?", ["žltú","modrú","zelenú","červenú"], "Citrón je žltý."],
+  ["Akú farbu má tráva?", ["zelenú","žltú","sivú","ružovú"], "Tráva je zelená."],
+  ["„Carlo má narodeniny.“", ["У Карла день народження.","Карло має подарунок.","Карло святкує Різдво.","Карло хворий."], "narodeniny — день народження."],
+  ["„Produkty sú v akcii.“", ["Товари зі знижкою.","Товари закінчились.","Товари нові.","Товари дорогі."], "V akcii — за акцією, зі знижкою."],
+  ["„Koľko to stojí?“", ["Скільки це коштує?","Де це стоїть?","Що це?","Коли це буде?"], "Koľko to stojí? — Скільки коштує?"],
+  ["„Červené alebo biele?“ O čom hovoríme?", ["o víne","o chlebe","o masle","o papieri"], "Červené alebo biele víno."],
+  ["„Darček“ je…", ["подарунок","торт","свято","гість"], "Darček pre Carla — подарунок для Карла."]
+ ]},
+ {title:"Gramatika", desc:"Знахідний відмінок, модальні дієслова, ísť", q:[
+  ["Potrebujeme ___. (bageta)", ["bagetu","bageta","bagety","bagete"], "Акузатив ж. р.: -a → -u."],
+  ["Kupujem ___. (syr)", ["syr","syra","syru","syre"], "Неістоти ч. р. в акузативі не змінюються."],
+  ["Mám rád ___. (brat)", ["brata","brat","bratovi","brate"], "Істоти ч. р. в акузативі: brat → brata."],
+  ["Kupujem ___. (víno)", ["víno","vína","vínu","víne"], "Середній рід в акузативі не змінюється."],
+  ["Vidíš ___? (ja)", ["mňa","ja","mne","môj"], "Акузатив від ja: mňa (ma)."],
+  ["Šampóny? Nie, nepotrebujem ___.", ["ich","ho","ju","im"], "Множина в акузативі: ich."],
+  ["Carlo ___ piť alkohol, lebo šoféruje.", ["nesmie","nechcem","nemusíš","smieme"], "nesmieť — не можна (заборона)."],
+  ["Musíme ___ oslavu.", ["urobiť","urobíme","robí","urobil"], "Після модального дієслова — інфінітив."],
+  ["ja (ísť)", ["idem","ideš","ide","ideme"], "ísť: idem, ideš, ide."],
+  ["oni (ísť)", ["idú","ide","idete","idem"], "oni idú."],
+  ["Darček ___ Carla.", ["pre","v","z","k"], "pre + акузатив: pre Carla."],
+  ["Idem ___ poštu.", ["na","v","pri","zo"], "na + акузатив (куди?): na poštu."]
+ ]}
+]},
+{n:6, title:"V reštaurácii", tests:[
+ {title:"Reštaurácia a doprava", desc:"Ресторан, їжа, транспорт", q:[
+  ["Čo je „jedálny lístok“?", ["меню","рахунок","столик","чайові"], "Jedálny lístok — меню."],
+  ["Čo jeme pred hlavným jedlom?", ["polievku","dezert","sprepitné","účet"], "Polievka — суп, часто перша страва."],
+  ["„Zaplatíme osobitne.“", ["Заплатимо окремо.","Заплатимо разом.","Заплатимо пізніше.","Заплатимо карткою."], "spolu — разом, osobitne — окремо."],
+  ["Čo je „sprepitné“ (slang: tringelt)?", ["чайові","рахунок","решта","знижка"], "Sprepitné — чайові офіціанту."],
+  ["Víno, ktoré nie je sladké, je…", ["suché","kyslé","horké","slané"], "Не «nesladké», а «suché víno»."],
+  ["Opak slova „horúca“ (polievka):", ["studená","sladká","mastná","stará"], "horúci ↔ studený."],
+  ["„Chutí mi.“", ["Мені смакує.","Я голодний.","Я хочу пити.","Мені не смакує."], "Chutí mi / nechutí mi."],
+  ["„Kuracie mäso“ je…", ["курятина","свинина","яловичина","риба"], "kura — курча."],
+  ["„Bravčové mäso“ je…", ["свинина","курятина","баранина","телятина"], "Bravčové — свинина."],
+  ["„Prosím si účet.“", ["Рахунок, будь ласка.","Меню, будь ласка.","Воду, будь ласка.","Столик, будь ласка."], "Účet — рахунок."],
+  ["„Ako idete domov?“", ["Električkou.","Na zdravie.","Spolu.","Polievkou."], "Čím cestujeme? — інструментальний відмінок."],
+  ["Kde jeme zákusky a tortu?", ["v cukrárni","v bare","v jedálni","v bufete"], "Cukráreň — кондитерська."]
+ ]},
+ {title:"Gramatika", desc:"Орудний відмінок, дієслова V–VII, stať sa", q:[
+  ["Cestujem ___. (autobus)", ["autobusom","autobusu","autobus","autobuse"], "Інструментал ч. р.: -om."],
+  ["Cestujem ___. (električka)", ["električkou","električku","električke","električka"], "Інструментал ж. р.: -ou."],
+  ["Cestujem ___. (auto)", ["autom","autou","auta","aute"], "Інструментал с. р.: -om."],
+  ["Mäso ___ kapustou a knedľou.", ["s","z","k","do"], "s + інструментал — з (разом)."],
+  ["Ideš ___ mnou?", ["so","s","zo","z"], "Перед mnou кажемо «so»."],
+  ["Idem do kina s ___. (on)", ["ním","ho","jemu","on"], "s ním, s ňou, s nimi."],
+  ["Idem do kina s ___. (ona)", ["ňou","ju","jej","ona"], "s ňou."],
+  ["ja (pozvať)", ["pozvem","pozvám","pozvujem","pozveš"], "pozvať: pozvem, pozveš."],
+  ["oni (žiť)", ["žijú","žije","žijem","žiju"], "žiť: žijem, žiješ, žijú."],
+  ["ja (niesť)", ["nesiem","nesem","nesím","nesu"], "niesť: nesiem, nesieš."],
+  ["Stôl je ___ oknom.", ["pred","do","pre","na"], "pred, za, nad, pod + інструментал."],
+  ["„Ďakujeme za pozvanie!“ — „Rado sa ___.“", ["stalo","stal","stala","stať"], "Rado sa stalo — нема за що."]
+ ]}
+]},
+{n:7, title:"Na univerzite", tests:[
+ {title:"Univerzita a čas", desc:"Університет, розпорядок дня, котра година", q:[
+  ["Čo je „knižnica“?", ["бібліотека","книгарня","читальний зал","аудиторія"], "Knižnica — бібліотека."],
+  ["Čo je „študovňa“?", ["читальний зал","гуртожиток","їдальня","деканат"], "Študovňa — читальний зал."],
+  ["Čo je „čitateľský preukaz“?", ["читацький квиток","студентський квиток","паспорт","стипендія"], "Čitateľský preukaz потрібен у бібліотеці."],
+  ["Čo je „štipendium“?", ["стипендія","іспит","розклад","лекція"], "Štipendium — гроші на навчання."],
+  ["12:30 =", ["pol jednej","pol dvanástej","štvrť na jednu","tri štvrte na jednu"], "Pol jednej — пів на першу."],
+  ["8:15 =", ["štvrť na deväť","štvrť na osem","pol deviatej","tri štvrte na deväť"], "Štvrť na deväť — чверть на дев'яту."],
+  ["10:45 =", ["tri štvrte na jedenásť","tri štvrte na desať","pol jedenástej","štvrť na jedenásť"], "Tri štvrte na jedenásť — за чверть одинадцята."],
+  ["14:00 = o ___ poobede", ["druhej","štrnástej","prvej","tretej"], "O druhej poobede — о другій по обіді."],
+  ["„doobeda“ znamená…", ["до обіду","після обіду","ввечері","вночі"], "doobeda ↔ poobede."],
+  ["„Som unavená a nevyspatá.“", ["Я втомлена й невиспана.","Я голодна й сумна.","Я щаслива й весела.","Я хвора й зайнята."], "unavený — втомлений."],
+  ["„Ráno som zaspala.“", ["Зранку я проспала.","Зранку я снідала.","Зранку я пішла.","Зранку я працювала."], "Zaspať (ráno) — проспати."],
+  ["„Mám smolu.“", ["Мені не щастить.","У мене багато часу.","Я маю рацію.","Я поспішаю."], "To je smola! — Яка невдача!"]
+ ]},
+ {title:"Gramatika", desc:"Дієслова VIII–X, минулий час, ešte / už", q:[
+  ["ja (spať)", ["spím","spíme","spia","spíš"], "spať: spím, spíš, spí."],
+  ["ja (stretnúť)", ["stretnem","stretnúm","stretním","stretnam"], "stretnúť: stretnem, stretneš."],
+  ["oni (vidieť)", ["vidia","vidí","vidíte","vidím"], "vidieť: vidím, vidíš, vidia."],
+  ["Johanna: „Dnes som ešte ___.“ (nejesť)", ["nejedla","nejedol","nejedli","nejem"], "Жінка: jedla som; чоловік: jedol som."],
+  ["On ___ v knižnici.", ["bol","bola","boli","bolo"], "byť: bol, bola, bolo, boli."],
+  ["My ___ na obede.", ["sme boli","som bol","ste boli","boli"], "my sme boli."],
+  ["Carlo: „Včera som ___ prezentáciu.“", ["pripravil","pripravila","pripravili","pripravuje"], "Чоловік: pripravil som."],
+  ["Kto hovorí „zabudla som“?", ["žena","muž","muži","my"], "-la — жіночий рід."],
+  ["Johanna: „Na univerzitu som ___ neskoro.“", ["prišla","prišiel","prišli","prídem"], "prísť: prišiel, prišla."],
+  ["Je jedna hodina a ja som ___ nejedla.", ["ešte","už","aj","len"], "ešte ne- — ще не."],
+  ["Študijné je zatvorené, ___ tam nikto nie je.", ["už","ešte","aj","len"], "už — вже."],
+  ["„Nestretli sme sa.“", ["Ми не зустрілися.","Ми зустрілися.","Ми зустрінемося.","Ми не знайомі."], "Минулий час із запереченням: nestretli sme sa."]
+ ]}
+]},
+{n:8, title:"Vo firme", tests:[
+ {title:"Firma a kalendár", desc:"Фірма, дні, місяці, резюме", q:[
+  ["Čo je „porada“?", ["нарада","порада","перерва","звіт"], "Porada — нарада (не «порада»!)."],
+  ["Čo je „školenie“?", ["навчання для працівників","спортивне тренування","школа","урок"], "Na školení školiteľ školí zamestnancov."],
+  ["Čo je „pohovor“?", ["співбесіда","розмова телефоном","нарада","лекція"], "Pohovor — співбесіда при прийомі на роботу."],
+  ["Čo je „služobná cesta“?", ["відрядження","відпустка","дорога на роботу","екскурсія"], "Služobná cesta = pracovná cesta."],
+  ["Čo je „zasadačka“?", ["зала для нарад","кухня","приймальня","склад"], "Zasadačka = zasadacia sála."],
+  ["Čo je „životopis“?", ["резюме (CV)","біографія книжки","заява","договір"], "Životopis — резюме."],
+  ["Deň po pondelku:", ["utorok","streda","nedeľa","piatok"], "pondelok, utorok, streda…"],
+  ["Deň pred nedeľou:", ["sobota","piatok","pondelok","štvrtok"], "…piatok, sobota, nedeľa."],
+  ["Piaty deň v týždni:", ["piatok","štvrtok","sobota","streda"], "piatok — п'ятниця."],
+  ["Mesiac po marci:", ["apríl","máj","február","jún"], "marec, apríl, máj."],
+  ["Posledný mesiac v roku:", ["december","november","január","október"], "december — грудень."],
+  ["Kto pracuje na recepcii?", ["recepčný","riaditeľ","účtovníčka","IT technik"], "Recepčný / recepčná — адміністратор."]
+ ]},
+ {title:"Gramatika", desc:"Дата, подвійне заперечення, місцевий відмінок", q:[
+  ["Dnes je ___ mája. (1.)", ["prvého","prvý","prvom","prvá"], "Дата в родовому: prvého mája."],
+  ["Je piatok ___. (13.)", ["trinásteho","trinásty","trinástom","trinásť"], "piatok trinásteho."],
+  ["Teraz tam ___ nie je.", ["nikto","niekto","každý","kto"], "Подвійне заперечення: nikto nie je."],
+  ["Nemám ___.", ["nič","niečo","všetko","čo"], "nemám nič — нічого не маю."],
+  ["Ktorá veta je správna?", ["Nikto neprišiel.","Nikto prišiel.","Niekto neprišiel nikto.","Nikto nie prišiel."], "nikto + дієслово із не-."],
+  ["Pracujem vo ___. (firma)", ["firme","firmu","firma","firmou"], "Локатив ж. р.: -e (firme)."],
+  ["Som v ___. (Žilina)", ["Žiline","Žilinu","Žilina","Žilinou"], "v Žiline."],
+  ["Stretnutie je na ___ poschodí. (piaty)", ["piatom","piaty","piateho","piatemu"], "Локатив: na piatom poschodí."],
+  ["Hovoríme o ___. (práca)", ["práci","prácu","práca","prácou"], "o + локатив: o práci."],
+  ["Mám stretnutie ___ firme Plastex.", ["vo","do","na","z"], "Перед f/v кажемо «vo»: vo firme."],
+  ["Hotel je ___ námestí.", ["na","do","o","s"], "na námestí — на площі."],
+  ["Hovorili sme o ___. (ty)", ["tebe","ťa","ty","tvoj"], "o tebe, o mne, o ňom."]
+ ]}
+]},
+{n:9, title:"Na konferencii", tests:[
+ {title:"Konferencia a počítač", desc:"Конференція, робота з комп'ютером, анкета", q:[
+  ["Čo je „prednáška“?", ["лекція","перерва","запрошення","квиток"], "Prednáška — лекція."],
+  ["Čo je „príspevok“ (na konferencii)?", ["доповідь","внесок грошей","перерва","обід"], "Príspevok = referát."],
+  ["Čo je „prihláška“?", ["заявка","запрошення","програма","квиток"], "Prihláška na konferenciu — заявка."],
+  ["Čo je „pozvánka“?", ["запрошення","заявка","листівка","анкета"], "Pozvánka — запрошення."],
+  ["Čo je „letisko“?", ["аеропорт","вокзал","зупинка","готель"], "Letisko — аеропорт."],
+  ["Čo je „kufor“?", ["валіза","сумка","пакет","коробка"], "Mám veľký a ťažký kufor."],
+  ["„Uložiť súbor“ znamená…", ["зберегти файл","видалити файл","надрукувати файл","відкрити файл"], "uložiť — зберегти."],
+  ["Čo je „tlačiareň“?", ["принтер","сканер","монітор","клавіатура"], "Tlačiareň — принтер."],
+  ["Čo je „dotazník“?", ["анкета","запрошення","договір","звіт"], "Dotazník — анкета."],
+  ["„Gratulujem!“", ["Вітаю!","Дякую!","Вибачте!","До побачення!"], "Gratulovať — вітати."],
+  ["„Som na vás hrdý.“", ["Я пишаюся вами.","Я злий на вас.","Я чекаю на вас.","Я думаю про вас."], "hrdý — гордий."],
+  ["Kam cestuje Zuzana na konferenciu?", ["do Francúzska","do Česka","do Rakúska","do Ruska"], "Konferencia je vo Francúzsku (Paríž)."]
+ ]},
+ {title:"Gramatika", desc:"Зворотні дієслова: sa / si", q:[
+  ["Volám ___ Kika.", ["sa","si","seba","sebe"], "volať sa."],
+  ["Umývam ___ ruky.", ["si","sa","seba","ma"], "si — собі (umývam si ruky)."],
+  ["Netráp ___!", ["sa","si","ťa","seba"], "trápiť sa — переживати."],
+  ["Pripravuješ ___ na konferenciu?", ["sa","si","seba","ťa"], "pripravovať sa na niečo."],
+  ["Dám ___ kávu.", ["si","sa","seba","mi"], "dať si niečo — замовити, взяти собі."],
+  ["Stretli sme ___ v kaviarni.", ["sa","si","nás","seba"], "stretnúť sa."],
+  ["Rozprával som ___ s kolegami.", ["sa","si","ho","seba"], "rozprávať sa s niekým."],
+  ["Kúpim ___ nový mobil.", ["si","sa","seba","mi"], "kúpiť si — купити собі."],
+  ["Teším ___ na víkend.", ["sa","si","ma","seba"], "tešiť sa na niečo."],
+  ["Objednala som ___ tri knihy.", ["si","sa","seba","ma"], "objednať si."],
+  ["Dohodli sme ___, že ma odvezieš.", ["sa","si","nás","seba"], "dohodnúť sa."],
+  ["Zabudol som ___ doma diár.", ["si","sa","seba","ma"], "zabudnúť si niečo."]
+ ]}
+]},
+{n:10, title:"Noviny (opakovanie)", tests:[
+ {title:"Opakovanie: slovná zásoba", desc:"Повторення лексики", q:[
+  ["Čo sú „správy“ v televízii?", ["новини","погода","реклама","серіал"], "Správy — новини."],
+  ["Čo sú „noviny“?", ["газета","новини по ТБ","журнал","лист"], "Noviny — газета (тільки множина)."],
+  ["Čo je „relácia“?", ["телепередача","реклама","канал","фільм"], "Relácia — передача."],
+  ["Čo sú „Vianoce“?", ["Різдво","Великдень","Новий рік","день народження"], "Vianoce — Різдво."],
+  ["Akú farbu má more na mape?", ["modrú","zelenú","žltú","hnedú"], "More je modré."],
+  ["Svadobné šaty sú zvyčajne…", ["biele","čierne","červené","sivé"], "Svadobné šaty — весільна сукня."],
+  ["Opak slova „lacný“:", ["drahý","nový","pekný","veľký"], "lacný ↔ drahý."],
+  ["Čo sú „hodinky“?", ["наручний годинник","настінний годинник","година","календар"], "hodiny — годинник на стіні, hodinky — на руці."],
+  ["Čo je „obývačka“?", ["вітальня","спальня","кухня","ванна"], "Obývačka — вітальня."],
+  ["Čo je „spálňa“?", ["спальня","вітальня","передпокій","балкон"], "Spálňa — спальня."],
+  ["Čo je „kúpeľňa“?", ["ванна кімната","кухня","комора","дитяча"], "Kúpeľňa — ванна."],
+  ["Čo je „počasie“?", ["погода","час","новини","пора року"], "Počasie — погода."]
+ ]},
+ {title:"Opakovanie: gramatika", desc:"Повторення граматики", q:[
+  ["My ___ zo Slovenska.", ["sme","ste","sú","som"], "byť: my sme."],
+  ["Chcem kúpiť ___. (videokamera)", ["videokameru","videokamera","videokamery","videokamerou"], "Акузатив ж. р.: -u."],
+  ["dve digitálne ___", ["rádiá","rádio","rádií","rádiom"], "rádio → rádiá."],
+  ["Idem ___. (taxík)", ["taxíkom","taxíku","taxík","taxíka"], "Інструментал: taxíkom."],
+  ["V ___ je dobrá červená farba. (kuchyňa)", ["kuchyni","kuchyňu","kuchyňa","kuchyňou"], "Локатив: v kuchyni."],
+  ["Včera ___ v kine. (my)", ["sme boli","sme sú","bolo","boli ste"], "Минулий час: my sme boli."],
+  ["Teším ___ na Vianoce.", ["sa","si","ma","seba"], "tešiť sa."],
+  ["___ obľúbená farba je modrá. (ja)", ["Moja","Môj","Moje","Mojej"], "farba (ж. р.) → moja."],
+  ["___ ti pomôcť? (ja, môcť)", ["Môžem","Môžeš","Môže","Môžeme"], "môcť: môžem, môžeš, môže."],
+  ["Digitálne hodinky ___ v akcii.", ["sú","je","som","sme"], "hodinky мають тільки множину → sú."],
+  ["Nemám ___ čas.", ["žiadny","niektorý","každý","nejaký"], "Подвійне заперечення: nemám žiadny."],
+  ["Aký program chcete ___?", ["pozerať","pozerá","pozeráme","pozerali"], "Після chcieť — інфінітив."]
+ ]}
+]}
+];
+
+const LESSONS_A2 = [
+{n:1, title:"Program sa začína", tests:[
+ {title:"Rodinný duel a Slovensko", desc:"Телешоу, факти про Словаччину", q:[
+  ["Ako sa volá najvyššie pohorie Slovenska?", ["Vysoké Tatry","Malá Fatra","Alpy","Krkonoše"], "Vysoké Tatry — найвищі гори Словаччини."],
+  ["Ako sa volá najväčší slovenský hrad?", ["Spišský hrad","Bratislavský hrad","Trenčiansky hrad","Bojnický zámok"], "Spišský hrad — один із найбільших замків Центральної Європи."],
+  ["Ktorá rieka tečie cez Bratislavu?", ["Dunaj","Váh","Hron","Hornád"], "Через Братиславу тече Дунай."],
+  ["Aká mena platí na Slovensku?", ["euro","koruna","zlotý","forint"], "Від 2009 року в Словаччині євро."],
+  ["Ktorá krajina NESUSEDÍ so Slovenskom?", ["Nemecko","Česko","Rakúsko","Ukrajina"], "Сусіди: Чехія, Польща, Україна, Угорщина, Австрія."],
+  ["Čo sú „súrodenci“?", ["брати й сестри","батьки","дідусь і бабуся","двоюрідні брати"], "Súrodenci — брати й сестри."],
+  ["„Johanna je slobodná.“", ["Йоганна незаміжня.","Йоганна вільна від роботи.","Йоганна розлучена.","Йоганна заміжня."], "slobodný / slobodná — неодружений / незаміжня."],
+  ["„Narodila sa v auguste.“", ["Вона народилася в серпні.","Вона приїхала в серпні.","У неї відпустка в серпні.","Вона народилася восени."], "narodiť sa — народитися."],
+  ["Čo sú „kolieskové korčule“?", ["роликові ковзани","велосипед","лижі","скейтборд"], "Kolieskové korčule — ролики."],
+  ["Kto je „moderátor“ v televíznej šou?", ["ведучий","глядач","учасник","оператор"], "Moderátor веде передачу."],
+  ["Čo je „súťaž“?", ["змагання, конкурс","свято","новина","реклама"], "Rodinný duel — телевізійний конкурс."],
+  ["„Máte jeden bod!“", ["У вас одне очко!","У вас одне питання!","У вас одна хвилина!","Ви на першому місці!"], "bod — очко, бал."]
+ ]},
+ {title:"Gramatika", desc:"Асиміляція, ритмічний закон, присвійні займенники, pekný / cudzí", q:[
+  ["Ako sa vyslovuje „hrad“?", ["[hrat]","[hrad]","[hrát]","[hraď]"], "Дзвінкий приголосний у кінці слова оглушується: hrad [hrat]."],
+  ["Ako sa vyslovuje „kde“?", ["[gde]","[kde]","[kte]","[gte]"], "Перед дзвінким d звук k стає [g]."],
+  ["Ako sa vyslovuje „s bratom“?", ["[zbratom]","[sbratom]","[sbratam]","[zpratom]"], "s перед дзвінким звучить як [z]."],
+  ["Ktoré slovo je napísané správne?", ["krásny","krásný","krásni","krasný"], "Ритмічний закон: два довгі склади не стоять поруч."],
+  ["Oni (písať):", ["píšu","píšú","píšou","pišú"], "Ритмічний закон: píšu (не píšú)."],
+  ["___ kniha (cudzí)", ["cudzia","cudzá","cudzie","cudzí"], "Мʼякі прикметники: cudzí, cudzia, cudzie."],
+  ["___ auto (cudzí)", ["cudzie","cudzé","cudzia","cudzí"], "Середній рід: cudzie."],
+  ["To je ___ dom. (my)", ["náš","naša","naše","nášho"], "dom (ч. р.) → náš."],
+  ["___ sestra (vy)", ["vaša","váš","vaše","vašej"], "sestra (ж. р.) → vaša."],
+  ["To je auto Roberta. To je ___ auto.", ["jeho","jej","ich","svoje"], "jeho — його (не змінюється)."],
+  ["To sú deti Šoltýsovcov. To sú ___ deti.", ["ich","jeho","jej","naše"], "ich — їхній."],
+  ["___ dievča (pekný)", ["pekné","pekná","pekný","peknie"], "Тверді прикметники: pekný, pekná, pekné."]
+ ]}
+]},
+{n:2, title:"Čo radi robíte?", tests:[
+ {title:"Voľný čas a detektívka", desc:"Хобі, спорт, вільний час", q:[
+  ["Čo je „koníček“?", ["хобі","маленький кінь","спорт","робота"], "Koníček = hobby, улюблене заняття."],
+  ["Čo je „voľný čas“?", ["вільний час","робочий час","обідня перерва","відпустка"], "voľný čas — вільний час."],
+  ["Čo je „nákupné centrum“?", ["торговий центр","ринок","бізнес-центр","склад"], "nakupovať — робити покупки."],
+  ["Kde plávame?", ["v bazéne","v kine","v knižnici","v obchode"], "Bazén — басейн."],
+  ["„lyžovať sa“ znamená…", ["кататися на лижах","кататися на ковзанах","плавати","бігати"], "lyže — лижі."],
+  ["„korčuľovať sa“ znamená…", ["кататися на ковзанах","кататися на лижах","танцювати","грати у волейбол"], "korčule — ковзани."],
+  ["Čo je „výstava“?", ["виставка","вистава в театрі","вітрина","концерт"], "Rada navštevujem výstavy."],
+  ["„kresliť“ znamená…", ["малювати","писати","читати","фарбувати стіни"], "Rada kreslím."],
+  ["Čo sú „plavky“?", ["купальник / плавки","окуляри для плавання","рушник","шапочка"], "Tvoje plavky sú veľmi elegantné."],
+  ["„Vieš sa lyžovať?“", ["Ти вмієш кататися на лижах?","Ти любиш лижі?","Ти купив лижі?","Ти їдеш на лижі?"], "vedieť + інфінітив — вміти."],
+  ["Čo je „detektívka“?", ["детектив (книга чи фільм)","поліцейський","злочин","свідок"], "Detektívka — жанр."],
+  ["Kto je „páchateľ“?", ["злочинець","свідок","поліцейський","жертва"], "Páchateľ скоїв злочин."]
+ ]},
+ {title:"Gramatika", desc:"rád + дієслово, віддієслівні іменники, дієслова XI–XIV, svoj", q:[
+  ["Zuzana ___ pláva.", ["rada","rád","radi","rado"], "Жінка: rada, чоловік: rád, множина: radi."],
+  ["Robert ___ fotografuje.", ["rád","rada","radi","rade"], "rád + дієслово — любити щось робити."],
+  ["My ___ tancujeme.", ["radi","rád","rada","rado"], "Множина: radi."],
+  ["Mám rád ___. (káva)", ["kávu","káva","kávy","kávou"], "Mám rád + акузатив."],
+  ["Podstatné meno od „plávať“:", ["plávanie","plávateľ","plávka","plávaný"], "Віддієслівний іменник: -nie."],
+  ["Podstatné meno od „nakupovať“:", ["nakupovanie","nákupný","nakupujúci","nakupovať"], "nakupovanie — шопінг."],
+  ["ja (brať)", ["beriem","berám","bierem","brám"], "brať: beriem, berieš, berie."],
+  ["ja (vziať)", ["vezmem","vziam","vzám","vezniem"], "vziať: vezmem, vezmeš."],
+  ["on (pozrieť sa)", ["pozrie","pozre","pozrí","pozriete"], "pozrieť: pozriem, pozrieš, pozrie."],
+  ["ja (minúť)", ["miniem","minem","minúm","minujem"], "minúť: miniem, minieš."],
+  ["Ľudia tu trávia ___ voľný čas.", ["svoj","ich","jeho","môj"], "svoj — свій (належить підмету)."],
+  ["Robert kupuje darček ___ mame.", ["svojej","svoju","svoja","svoj"], "Давальний відмінок: svojej mame."]
+ ]}
+]},
+{n:3, title:"Vianoce u nás doma", tests:[
+ {title:"Rodina a Vianoce", desc:"Сімʼя, Різдво в Словаччині, емоції", q:[
+  ["Kedy je Štedrý deň?", ["24. decembra","25. decembra","31. decembra","6. januára"], "Štedrý deň — Святвечір, 24 грудня."],
+  ["Kedy je Silvester?", ["31. decembra","24. decembra","1. januára","26. decembra"], "Silvester — 31 грудня."],
+  ["Tradičná ryba na Štedrú večeru:", ["kapor","losos","tuniak","pstruh"], "На Святвечір традиційно їдять коропа."],
+  ["Čo je „kapustnica“?", ["капусняк (суп)","салат","пиріг","напій"], "Kapustnica — різдвяний суп із квашеної капусти."],
+  ["Čo sú „koledy“?", ["колядки","подарунки","свічки","прикраси"], "Slovenské koledy — словацькі колядки."],
+  ["Čo je „stromček“ na Vianoce?", ["ялинка","подарунок","зірка","вінок"], "Vianočný stromček — різдвяна ялинка."],
+  ["Čo sú „dvojčatá“?", ["близнюки","двоюрідні брати","сусіди","друзі"], "Martin a Lucia sú dvojčatá."],
+  ["Kto je „stará mama“?", ["бабуся","стара жінка","тітка","мама"], "stará mama — бабуся."],
+  ["Kto sú „rodičia“?", ["батьки","родичі","діти","брати"], "rodičia — мама й тато."],
+  ["„Ja som najstarší.“", ["Я найстарший.","Я старий.","Я старший за тебе.","Я наймолодший."], "Найвищий ступінь: najstarší."],
+  ["„Vitajte u nás!“", ["Ласкаво просимо до нас!","До побачення!","Приходьте ще!","Сідайте!"], "Vitajte — вітаємо."],
+  ["Emotikon :-( znamená…", ["smutný","šťastný","prekvapený","zamilovaný"], "smutný — сумний."]
+ ]},
+ {title:"Gramatika", desc:"Ступені порівняння, давальний відмінок, páčiť sa", q:[
+  ["starý → komparatív", ["starší","starejší","najstarší","starý"], "starý — starší — najstarší."],
+  ["pomalý → komparatív", ["pomalší","pomalejší","najpomalší","pomalý"], "pomalý — pomalší."],
+  ["mladý → superlatív", ["najmladší","mladší","najmladý","mladejší"], "naj- + komparatív."],
+  ["dobrý → komparatív", ["lepší","dobrejší","dobrší","najlepší"], "Неправильне: dobrý — lepší — najlepší."],
+  ["zlý → komparatív", ["horší","zlejší","zlší","najhorší"], "zlý — horší — najhorší."],
+  ["Kúpim darček ___. (mama)", ["mame","mamu","mamy","mamou"], "Давальний ж. р.: -e."],
+  ["Telefonujem ___. (Robert)", ["Robertovi","Roberta","Robertom","Robert"], "Давальний ч. р. (особи): -ovi."],
+  ["Pomôžem ___. (ty)", ["ti","ťa","tvoj","ty"], "Давальний: mi, ti, mu, jej."],
+  ["Mame sa ___ ľudová hudba.", ["páči","páčia","má rada","páčiš"], "Páčiť sa + давальний: Mame sa páči…"],
+  ["Romantické knihy sa jej ___.", ["páčia","páči","páčim","páčiš"], "Множина → páčia."],
+  ["Idem ___ lekárovi.", ["k","do","na","u"], "k + давальний — до когось."],
+  ["Ideme ___ rodičom do Popradu.", ["k","z","do","na"], "k rodičom — до батьків."]
+ ]}
+]},
+{n:4, title:"Cestovať je dobrodružstvo", tests:[
+ {title:"Stanica a letisko", desc:"Вокзал, квитки, аеропорт", q:[
+  ["Čo je „cestovný poriadok“?", ["розклад руху","квиток","каса","маршрут"], "Cestovný poriadok — розклад."],
+  ["Čo je „rýchlik“?", ["швидкий поїзд","трамвай","таксі","автобус"], "Rýchlik je pomalší ako IC, ale lacnejší."],
+  ["„Jednosmerný lístok“ je…", ["квиток в один бік","квиток туди й назад","студентський квиток","проїзний"], "jednosmerný — в один бік."],
+  ["„Spiatočný lístok“ je…", ["квиток туди й назад","квиток в один бік","квиток першого класу","квиток зі знижкою"], "spiatočný — туди й назад."],
+  ["Čo je „miestenka“?", ["квиток із бронюванням місця","штраф","багаж","розклад"], "Miestenka — резервація місця."],
+  ["Čo je „nástupište“?", ["платформа","вагон","каса","зала очікування"], "Vlak príde na druhé nástupište."],
+  ["„Vlak mešká.“", ["Поїзд запізнюється.","Поїзд прибув.","Поїзд скасовано.","Поїзд переповнений."], "meškať — запізнюватися."],
+  ["Čo je „batožina“?", ["багаж","квиток","місце","купе"], "Pomohli by ste mi s batožinou?"],
+  ["Čo je „pokuta“?", ["штраф","знижка","доплата","решта"], "Pokuta — грошове покарання."],
+  ["Kto kontroluje lístky vo vlaku?", ["sprievodkyňa","pokladníčka","rušňovodič","cestujúci"], "Sprievodkyňa — провідниця."],
+  ["Kde kúpite lístok na vlak?", ["v pokladnici","na nástupišti","v kupé","v jedálenskom vozni"], "Pokladnica — каса."],
+  ["Čo je „odlet“?", ["виліт","приліт","пересадка","посадка"], "odlet ↔ prílet."]
+ ]},
+ {title:"Gramatika", desc:"Прислівники, порівняння, ktorý, preto / lebo, умовний спосіб", q:[
+  ["rýchly → príslovka", ["rýchlo","rýchly","rýchla","rýchlosť"], "Від прикметника: -o / -e."],
+  ["dobrý → príslovka", ["dobre","dobro","dobrý","dobrá"], "dobrý → dobre."],
+  ["rýchlo → komparatív", ["rýchlejšie","rýchlejší","rýchlšie","najrýchlo"], "rýchlo — rýchlejšie — najrýchlejšie."],
+  ["dobre → komparatív", ["lepšie","dobrejšie","lepší","najlepšie"], "dobre — lepšie — najlepšie."],
+  ["veľa → komparatív", ["viac","veľkejšie","väčší","najviac"], "veľa — viac — najviac."],
+  ["Vlak, ___ ide do Bratislavy, mešká.", ["ktorý","ktorá","ktoré","ktorí"], "vlak (ч. р.) → ktorý."],
+  ["Pokladníčka, ___ predáva lístky, je milá.", ["ktorá","ktorý","ktoré","ktorú"], "pokladníčka (ж. р.) → ktorá."],
+  ["Ideme rýchlikom, ___ je lacnejší.", ["lebo","preto","ale","aby"], "lebo — тому що (причина)."],
+  ["Rýchlik je lacnejší, ___ ideme rýchlikom.", ["preto","lebo","pretože","keby"], "preto — тому (наслідок)."],
+  ["Pomohli ___ ste mi s batožinou?", ["by","bi","byť","be"], "Умовний спосіб: by + -l."],
+  ["Ja ___ chcel cestovať vlakom.", ["by som","som by","bych","by si"], "ja by som chcel."],
+  ["Keby som mal čas, ___ do Tatier.", ["išiel by som","idem","išiel som","pôjdem"], "keby… + by — нереальна умова."]
+ ]}
+]},
+{n:5, title:"U lekára", tests:[
+ {title:"Telo a zdravie", desc:"Тіло, симптоми, вказівки лікаря", q:[
+  ["Čo je „hrdlo“?", ["горло","голова","серце","живіт"], "Bolí ma hrdlo."],
+  ["„Kašlem.“", ["Я кашляю.","Я чхаю.","Я плачу.","Я сплю."], "kašľať — кашляти."],
+  ["Čo je „horúčka“?", ["висока температура","нежить","кашель","біль"], "Mám horúčku — у мене температура."],
+  ["Čo je „nádcha“?", ["нежить","температура","алергія","кашель"], "Mám nádchu."],
+  ["„Bolí ma hlava.“", ["У мене болить голова.","Я хворію.","Я втомився.","Мені холодно."], "Bolí ma… — у мене болить…"],
+  ["Čo je „preukaz poistenca“?", ["картка медичного страхування","рецепт","паспорт","направлення"], "У лікаря показуємо preukaz poistenca."],
+  ["Čo je „pohotovosť“?", ["невідкладна допомога","аптека","лікарняна палата","поліклініка"], "Pohotovosť je otvorená nonstop."],
+  ["„Dýchajte zhlboka.“", ["Дихайте глибоко.","Не дихайте.","Відкрийте рота.","Сідайте."], "Вказівка лікаря."],
+  ["„Vyzlečte sa, prosím.“", ["Роздягніться, будь ласка.","Одягніться, будь ласка.","Ляжте, будь ласка.","Встаньте, будь ласка."], "vyzliecť sa ↔ obliecť sa."],
+  ["„Je mi zle.“", ["Мені погано.","Мені сумно.","Мені нудно.","Мені холодно."], "Je mi zle / dobre."],
+  ["Čo je „chrbát“?", ["спина","груди","шия","плече"], "Bolí ma chrbát."],
+  ["Lekár sa pýta: „Čo vám je?“", ["Що з вами?","Хто ви?","Скільки вам років?","Звідки ви?"], "Čo ti je? / Čo vám je?"]
+ ]},
+ {title:"Gramatika", desc:"Родовий відмінок: іменники, займенники, прийменники", q:[
+  ["pol kila ___ (citróny)", ["citrónov","citróny","citrónom","citrónu"], "Кількість + родовий множини: citrónov."],
+  ["fľaša ___ (sirup)", ["sirupu","sirup","sirupom","sirupe"], "Родовий ч. р. (неістоти): -u."],
+  ["pohár ___ (med)", ["medu","med","medom","mede"], "pohár medu."],
+  ["Bojím sa ___. (lekár)", ["lekára","lekár","lekárovi","lekárom"], "báť sa + родовий."],
+  ["Zúčastnil sa ___. (konferencia)", ["konferencie","konferenciu","konferencii","konferenciou"], "zúčastniť sa + родовий."],
+  ["Idem z ___. (nemocnica)", ["nemocnice","nemocnicu","nemocnici","nemocnicou"], "z + родовий."],
+  ["čaj bez ___ (cukor)", ["cukru","cukor","cukrom","cukre"], "bez + родовий."],
+  ["Idem do ___. (lekáreň)", ["lekárne","lekáreň","lekárni","lekárňou"], "do + родовий."],
+  ["Som u ___. (lekár)", ["lekára","lekárovi","lekár","lekárom"], "u + родовий."],
+  ["Bez ___ nejdem! (ty)", ["teba","ťa","ti","tebou"], "Родовий: mňa, teba, neho, nej."],
+  ["Kúpil som päť ___. (grep)", ["grepov","grepy","grep","grepu"], "5 і більше + родовий множини."],
+  ["V čakárni je veľa ___. (ľudia)", ["ľudí","ľudia","ľuďom","ľuďmi"], "veľa + родовий: ľudí."]
+ ]}
+]},
+{n:6, title:"Zavolajte neskôr, prosím!", tests:[
+ {title:"Telefón a korešpondencia", desc:"Телефонні розмови, листи, e-mail", q:[
+  ["„Neruším?“", ["Я не заважаю?","Мене чути?","Хто це?","Ти зайнятий?"], "rušiť — заважати."],
+  ["„Moment, prepojím vás.“", ["Хвилинку, я вас зʼєдную.","Хвилинку, я вам передзвоню.","Хвилинку, я запишу.","Хвилинку, я перевірю."], "prepojiť — зʼєднати."],
+  ["„Chcete nechať odkaz?“", ["Хочете залишити повідомлення?","Хочете почекати?","Хочете передзвонити?","Хочете поговорити з ним?"], "odkaz — повідомлення."],
+  ["„Pomýlili ste sa.“", ["Ви помилилися номером.","Ви запізнилися.","Ви мене не почули.","Ви праві."], "pomýliť sa — помилитися."],
+  ["„Prerušilo nás.“", ["Нас розʼєднало.","Нас перебили.","Ми посварилися.","Ми зустрілися."], "prerušiť — перервати."],
+  ["„Povedzte mu, aby sa mi ozval.“", ["Скажіть йому, щоб він мені подзвонив.","Скажіть йому, що я прийду.","Скажіть йому привіт.","Скажіть йому, що я зайнятий."], "ozvať sa — дати про себе знати."],
+  ["„Pán Biagiotti je na porade.“", ["Пан Біаджотті на нараді.","Пан Біаджотті у відпустці.","Пан Біаджотті хворий.","Пан Біаджотті в дорозі."], "porada — нарада."],
+  ["Ako sa končí formálny list?", ["S pozdravom","Čau","Pusa","Maj sa"], "S pozdravom — з повагою."],
+  ["Ako sa začína formálny list?", ["Vážený pán…","Ahoj, Peter!","Čau!","Zdravím ťa!"], "Vážený pán / Vážená pani."],
+  ["Čo je „predmet“ v e-maile?", ["тема листа","адресат","вкладення","підпис"], "Predmet: Pozvánka."],
+  ["Čo je „príloha“ v e-maile?", ["вкладення","підпис","копія","спам"], "V prílohe posielam…"],
+  ["„Daj mi vedieť.“", ["Дай мені знати.","Дай мені подумати.","Дай мені спокій.","Дай мені номер."], "Premysli si to a daj mi vedieť."]
+ ]},
+ {title:"Gramatika", desc:"Наказовий спосіб, непряма мова, порядок слів", q:[
+  ["zavolať → imperatív (vy)", ["zavolajte","zavoláte","zavolaj","zavolajme"], "Zavolajte neskôr, prosím!"],
+  ["hovoriť → imperatív (ty)", ["hovor","hovori","hovoríš","hovorte"], "Pokojne hovor."],
+  ["čakať → imperatív (my)", ["čakajme","čakáme","čakaj","čakajte"], "my: -me (čakajme)."],
+  ["prísť → imperatív (ty)", ["príď","prídi","prídeš","prišiel"], "prísť → príď, príďte."],
+  ["povedať → imperatív (vy)", ["povedzte","povedajte","poviete","povedz"], "povedať → povedz, povedzte."],
+  ["chodiť → zápor (ty)", ["Nechoď!","Nechodíš!","Nechodi!","Nie choď!"], "Заперечення: ne- + imperatív."],
+  ["Povedzte mu, ___ mi zavolal.", ["aby","že","keby","ktorý"], "Прохання в непрямій мові: aby."],
+  ["„Zavolám neskôr.“ → Johanna povedala, ___ zavolá neskôr.", ["že","aby","keby","lebo"], "Повідомлення в непрямій мові: že."],
+  ["Ktorý slovosled je správny?", ["Dám ti ho.","Dám ho ti.","Ho ti dám.","Ti dám ho ja."], "Спочатку давальний, потім знахідний: ti ho."],
+  ["Pošlem ___ e-mail. (ona)", ["jej","ju","ňu","jeho"], "Давальний від ona: jej."],
+  ["Ukážte ___ hrdlo. (ja)", ["mi","ma","mňa","môj"], "Давальний: mi."],
+  ["Napíš ___ to, prosím. (my)", ["nám","nás","naše","my"], "Давальний від my: nám."]
+ ]}
+]},
+{n:7, title:"Výlet po Slovensku", tests:[
+ {title:"Slovensko", desc:"Подорож Словаччиною, замки, гори", q:[
+  ["Kde je Spišský hrad?", ["na východnom Slovensku","na západnom Slovensku","v Bratislave","v Česku"], "Spiš — на сході Словаччини."],
+  ["Čo je „Slovenský raj“?", ["národný park","hrad","mesto","jazero"], "Slovenský raj — національний парк."],
+  ["Čo je „pleso“?", ["гірське озеро","вершина","печера","долина"], "Tatranské plesá — гірські озера."],
+  ["Čo je „chata“ v horách?", ["гірський притулок","готель","вершина","замок"], "Horské chaty — у горах."],
+  ["Čo je „túra“?", ["піший похід","екскурсія автобусом","поїздка","прогулянка містом"], "Túra — іти кудись пішки, у гори."],
+  ["Čo je „prehliadka hradu“?", ["екскурсія замком","квиток до замку","руїни замку","карта замку"], "Prehliadka trvá 45 minút."],
+  ["Čo je „príplatok“?", ["доплата","знижка","решта","штраф"], "Za fotografovanie je príplatok."],
+  ["„Ako sa dostanem na hrad?“", ["Як мені дістатися до замку?","Скільки коштує замок?","Коли відкривається замок?","Що це за замок?"], "dostať sa niekam — дістатися."],
+  ["„Odbočte vpravo.“", ["Поверніть праворуч.","Їдьте прямо.","Поверніть ліворуч.","Зупиніться."], "odbočiť — повернути."],
+  ["Čo je „dovolenka“?", ["відпустка","свято","вихідний","подорож"], "Začína sa mi dovolenka."],
+  ["Čo je Tatranská magistrála?", ["turistická trasa","diaľnica","železnica","rieka"], "Tatranská magistrála зʼєднує гірські озера й хати."],
+  ["Ktoré mesto je na východnom Slovensku?", ["Košice","Trenčín","Žilina","Nitra"], "Košice, Prešov, Bardejov — схід."]
+ ]},
+ {title:"Gramatika", desc:"Вид дієслова, майбутній час, ísť / chodiť, часові речення", q:[
+  ["robiť → dokonavý vid", ["urobiť","robievať","porobiť sa","robený"], "urobiť — доконаний вид."],
+  ["písať → dokonavý vid", ["napísať","písavať","prepísaný","písanie"], "napísať — написати."],
+  ["Zajtra ___ pracovať.", ["budem","som","bol som","bude"], "Майбутній недоконаного: budem + інфінітив."],
+  ["Zajtra ___ list. (napísať)", ["napíšem","budem napísať","napísal som","píšem"], "Доконаний вид: теперішня форма = майбутнє."],
+  ["Ktorá veta je NESPRÁVNA?", ["Budem urobiť.","Budem robiť.","Urobím to.","Robím to."], "budem + тільки недоконаний вид."],
+  ["Každý deň ___ do práce.", ["chodím","idem","pôjdem","išiel som"], "chodiť — регулярно."],
+  ["Teraz ___ do obchodu.", ["idem","chodím","chodil som","chodievam"], "ísť — зараз, в один бік."],
+  ["Zajtra ___ na výlet.", ["pôjdem","chodím","chodil som","išiel som"], "Майбутнє від ísť: pôjdem."],
+  ["___ prídem domov, zavolám ti.", ["Keď","Prečo","Lebo","Ktorý"], "keď — коли (час)."],
+  ["___ som bol na Spiši, kúpil som pohľadnice.", ["Keď","Aby","Že","Ako"], "Часове речення з keď."],
+  ["Včera som ___ celý deň. (čítať)", ["čítal","prečítal","prečítam","čítam"], "Процес → недоконаний вид."],
+  ["Včera som ___ celú knihu.", ["prečítal","čítal","čítam","prečítam"], "Результат → доконаний вид."]
+ ]}
+]},
+{n:8, title:"Festival Blúz", tests:[
+ {title:"Festival a počasie", desc:"Погода, фестиваль, речі в дорогу", q:[
+  ["Čo je „predpoveď počasia“?", ["прогноз погоди","погода сьогодні","температура","клімат"], "Predpoveď — прогноз."],
+  ["„Je slnečno.“", ["Сонячно.","Хмарно.","Вітряно.","Туман."], "slnko — сонце."],
+  ["„Je oblačno.“", ["Хмарно.","Сонячно.","Холодно.","Душно."], "oblak — хмара."],
+  ["„Prší.“", ["Іде дощ.","Іде сніг.","Дме вітер.","Гримить."], "pršať — іти (про дощ)."],
+  ["„Sneží.“", ["Іде сніг.","Іде дощ.","Мороз.","Тане сніг."], "snežiť — іти (про сніг)."],
+  ["„Fúka vietor.“", ["Дме вітер.","Іде дощ.","Світить сонце.","Холодно."], "vietor — вітер."],
+  ["Čo je „dáždnik“?", ["парасолька","дощовик","чоботи","капюшон"], "dážď — дощ."],
+  ["Čo je „stan“?", ["намет","спальник","рюкзак","табір"], "Do kempu berieme stan."],
+  ["Čo je „bunda“?", ["куртка","светр","футболка","шорти"], "Zober si sveter a bundu."],
+  ["„Aprílové počasie“ je…", ["мінлива погода","тепла погода","дощова погода","зимова погода"], "Може бути й сонце, і сніг."],
+  ["Čo je „tvorivá dielňa“?", ["творча майстерня","фабрика","кухня","гараж"], "tvorivá dielňa = workshop."],
+  ["„najvyššia teplota 17 °C“", ["максимальна температура 17 °C","мінімальна температура 17 °C","середня температура 17 °C","температура води 17 °C"], "najvyšší ↔ najnižší."]
+ ]},
+ {title:"Gramatika", desc:"Безособові дієслова, умовні речення", q:[
+  ["Na Slovensku ___ po slovensky.", ["sa hovorí","hovorím","sa hovorím","hovorí si"], "Безособова форма: sa + 3-тя особа."],
+  ["Lístky ___ pri vchode.", ["sa predávajú","sa predáva","predávajú si","predávam sa"], "lístky (множина) → sa predávajú."],
+  ["Festival ___ v apríli.", ["sa koná","koná","si koná","sa konám"], "konať sa — відбуватися."],
+  ["Tu ___ fajčiť.", ["sa nesmie","nesmiem sa","nesmie si","sa nesmú"], "Заборона: nesmie sa / sa nesmie."],
+  ["Keby som mal mobil, ___ by som mu.", ["zavolal","zavolám","volám","zavolať"], "keby + -l by."],
+  ["Keby pršalo, ___ doma.", ["zostali by sme","zostaneme","zostali sme","zostávame"], "Нереальна умова → умовний спосіб."],
+  ["Ak bude pršať, ___ doma.", ["zostaneme","zostali sme","zostávali","zostaňme"], "Реальна умова (ak) → майбутній час."],
+  ["To by bolo super, ___ to fungovalo.", ["keby","ak","že","lebo"], "keby — якби."],
+  ["Keby ___ čas, prišiel by som. (ja)", ["som mal","mám","budem mať","mal by som"], "keby som mal…"],
+  ["___ bude pekne, pôjdeme na festival.", ["Ak","Keby","Aby","Lebo"], "ak — якщо (реально)."],
+  ["Ako ___ píše tvoje meno?", ["sa","si","ho","seba"], "Ako sa píše…? — Як пишеться…?"],
+  ["Kde ___ kupujú lístky?", ["sa","si","ich","seba"], "Безособова форма з sa."]
+ ]}
+]},
+{n:9, title:"Romantická večera", tests:[
+ {title:"Láska, cirkus, večera", desc:"Тварини, рецепт, зовнішність, кохання", q:[
+  ["Čo je „opica“?", ["мавпа","жирафа","ведмідь","верблюд"], "opica — мавпа."],
+  ["Čo je „ťava“?", ["верблюд","слон","кінь","бегемот"], "ťava — верблюд."],
+  ["Čo je „medveď“?", ["ведмідь","вовк","лев","тигр"], "medveď — ведмідь."],
+  ["Čo sú „šelmy“?", ["хижаки","птахи","риби","мавпи"], "Tigre a levy sú šelmy."],
+  ["„Láska ide cez žalúdok.“", ["Шлях до серця лежить через шлунок.","Кохання сліпе.","Кохання — це біль.","Кохання не має меж."], "Прислівʼя."],
+  ["Čo je „múka“?", ["борошно","цукор","масло","тісто"], "Na koláč potrebujeme múku."],
+  ["Čo sú „jahody“?", ["полуниця","вишні","малина","яблука"], "jahodový zákusok — полуничний пиріг."],
+  ["„upiecť koláč“", ["спекти пиріг","зварити суп","купити торт","зʼїсти пиріг"], "piecť — пекти."],
+  ["„Mám nalakované nechty.“", ["У мене нафарбовані нігті.","У мене підстрижене волосся.","У мене нові туфлі.","У мене макіяж."], "nechty — нігті."],
+  ["Čo sú „vlasy“?", ["волосся","вуса","брови","вії"], "Johanna je ryšavá, má ryšavé vlasy."],
+  ["Kto je „krotiteľ“?", ["дресирувальник","клоун","акробат","глядач"], "Krotiteľ pracuje so šelmami."],
+  ["„Vyzeráš výborne!“", ["Ти чудово виглядаєш!","Ти чудово готуєш!","Ти чудово співаєш!","Ти дуже гарно говориш!"], "vyzerať — виглядати."]
+ ]},
+ {title:"Gramatika", desc:"Тварини (множина), активні й пасивні дієприкметники", q:[
+  ["tiger → plurál", ["tigre","tigri","tigrovia","tigry"], "Тварини ч. р.: tigre, levy, kone."],
+  ["lev → plurál", ["levy","levi","levovia","leve"], "lev → levy."],
+  ["kôň → plurál", ["kone","koni","koňovia","koňy"], "kôň → kone."],
+  ["medveď → plurál", ["medvede","medvedi","medveďovia","medvedy"], "medveď → medvede."],
+  ["spievať → aktívne particípium", ["spievajúci","spievaný","spievavý","spievanie"], "spievajúci hroch — бегемот, що співає."],
+  ["tancovať → aktívne particípium", ["tancujúci","tancovaný","tancovací","tancovanie"], "tancujúci slon."],
+  ["spať → aktívne particípium", ["spiaci","spajúci","spaný","spatý"], "spiaci lev — сплячий лев."],
+  ["kričať → aktívne particípium", ["kričiaci","kričajúci","kričaný","kričný"], "-iaci після м'якої основи."],
+  ["Obed je ___. (uvariť)", ["uvarený","uvariaci","uvarujúci","uvarenie"], "Пасивний дієприкметник: -ný / -tý."],
+  ["Dom je ___. (upratať)", ["uprataný","upratajúci","upratávaný","upratujúci"], "upratať → uprataný."],
+  ["Vlasy nie sú ___. (zafarbiť)", ["zafarbené","zafarbený","zafarbila","zafarbujúce"], "vlasy (мн.) → zafarbené."],
+  ["Johanna: „Som ___ do cirkusu.“ (pozvať)", ["pozvaná","pozvala","pozývajúca","pozvanie"], "Пасив: som pozvaná."]
+ ]}
+]},
+{n:10, title:"Gertrúda (opakovanie)", tests:[
+ {title:"Témy: mesto, radosti, horoskop", desc:"Partyslava, Malé radosti, Horoskop, Kríza rodiny", q:[
+  ["Čo je „Partyslava“?", ["žartovná prezývka Bratislavy","festival","nočný klub","časopis"], "Partyslava — жартівлива назва Братислави."],
+  ["Čo je „budova“?", ["будівля","вулиця","площа","парк"], "Nové budovy majú až 20 poschodí."],
+  ["Čo je „poschodie“?", ["поверх","дах","підвал","сходи"], "Budova má dvadsať poschodí."],
+  ["Čo je „ubytovanie“?", ["житло, проживання","ресторан","транспорт","екскурсія"], "Informácie o ubytovaní."],
+  ["Čo je „rozlúčka so slobodou“?", ["парубочий / дівич-вечір","весілля","розлучення","день народження"], "Rozlúčka so slobodou — перед весіллям."],
+  ["Čo sú „malé radosti“?", ["маленькі радощі","дрібні проблеми","маленькі діти","дрібні гроші"], "Malé radosti života."],
+  ["Čo je „zrkadlo“?", ["дзеркало","вікно","фото","екран"], "Pozriete sa do zrkadla."],
+  ["„obyčajný deň“", ["звичайний день","вихідний день","поганий день","святковий день"], "obyčajný — звичайний."],
+  ["Čo je „znamenie“ v horoskope?", ["знак зодіаку","прогноз","зірка","планета"], "Aké je tvoje znamenie?"],
+  ["„Blíženci“ v horoskope sú…", ["Близнюки","Терези","Діва","Рак"], "Blíženci — Близнюки."],
+  ["Čo je „hádka“?", ["сварка","розмова","жарт","зустріч"], "Kríza rodiny — hádky."],
+  ["Čo je „rozvod“?", ["розлучення","весілля","заручини","переїзд"], "rozvod ↔ svadba."]
+ ]},
+ {title:"Opakovanie: gramatika A2", desc:"Повторення граматики книги A2", q:[
+  ["dobrý → komparatív", ["lepší","dobrejší","dobrší","najlepší"], "dobrý — lepší — najlepší."],
+  ["Pomáham ___. (mama)", ["mame","mamu","mamy","mamou"], "pomáhať + давальний."],
+  ["čaj bez ___ (cukor)", ["cukru","cukor","cukrom","cukre"], "bez + родовий."],
+  ["zavolať → imperatív (vy)", ["zavolajte","zavoláte","zavolaj","zavolajme"], "Наказовий спосіб."],
+  ["Keby som mal čas, ___.", ["prišiel by som","prídem","prišiel som","prichádzam"], "keby + умовний спосіб."],
+  ["Zajtra ___ list. (napísať)", ["napíšem","budem napísať","píšem","napísal som"], "Доконаний вид → майбутнє."],
+  ["Každý deň ___ na univerzitu.", ["chodím","idem","pôjdem","šiel som"], "chodiť — регулярно."],
+  ["Robert kupuje darček ___ mame.", ["svojej","jeho","svoju","svoj"], "svoj — свій."],
+  ["Na Slovensku ___ po slovensky.", ["sa hovorí","hovorím","sa hovorím","hovorí si"], "Безособова форма."],
+  ["Zuzana ___ tancuje.", ["rada","rád","radi","rado"], "Жінка → rada."],
+  ["spievať → aktívne particípium", ["spievajúci","spievaný","spievanie","spievavý"], "-úci / -iaci."],
+  ["Idem ___ zubárovi.", ["k","do","na","u"], "k + давальний."]
+ ]}
+]}
+];
+
+const BOOKS = {A1: LESSONS, A2: LESSONS_A2};
+const SYMS = ["á","ä","ô","č"];
+const PREFIX = "krizomkrazom-hra-";
+const PEER_CFG = { debug: 0, config: { iceServers: [
+  { urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }, { urls: "stun:stun2.l.google.com:19302" } ] } };
+const $ = id => document.getElementById(id);
+const SCREENS = ["home","pJoin","pGame","hSetup","hLobby","hQ","hEnd"];
+function show(id){ SCREENS.forEach(s => $(s).hidden = s !== id); window.scrollTo(0,0); }
+function shuffle(a){ a = a.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function el(tag, cls, text){ const e=document.createElement(tag); if(cls) e.className=cls; if(text!=null) e.textContent=text; return e; }
+function baseUrl(){ return location.href.split("#")[0].split("?")[0]; }
+
+/* ============ HOME ============ */
+$("goJoin").onclick = () => show("pJoin");
+$("goHost").onclick = () => { fillLessons(); show("hSetup"); };
+try { const n = localStorage.getItem("kk_name"); if(n) $("nameIn").value = n; } catch(e){}
+
+/* ============ PLAYER ============ */
+let pPeer = null, pConn = null, pState = { name:"", score:0, qIdx:-1, timer:null };
+$("pinIn").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g,"").slice(0,6); });
+$("joinBtn").onclick = playerJoin;
+$("nameIn").addEventListener("keydown", e => { if(e.key==="Enter") playerJoin(); });
+
+function playerJoin(){
+  const pin = $("pinIn").value.trim(), name = $("nameIn").value.trim();
+  $("joinErr").textContent = "";
+  if(pin.length !== 6){ $("joinErr").textContent = "PIN має 6 цифр."; return; }
+  if(!name){ $("joinErr").textContent = "Введи своє ім'я."; return; }
+  if(typeof Peer === "undefined"){ $("joinErr").textContent = "Не вдалося завантажити гру. Перевір інтернет."; return; }
+  try { localStorage.setItem("kk_name", name); } catch(e){}
+  $("joinBtn").disabled = true; $("joinBtn").textContent = "Pripájam…";
+  pState.name = name;
+  if(pPeer) { try{ pPeer.destroy(); }catch(e){} }
+  pPeer = new Peer(undefined, PEER_CFG);
+  const fail = msg => { $("joinErr").textContent = msg; $("joinBtn").disabled = false; $("joinBtn").textContent = "Hrať!"; };
+  const guard = setTimeout(() => { if(!pConn || !pConn.open) fail("Не вдалося підключитися. Перевір PIN і спробуй ще раз."); }, 15000);
+  pPeer.on("error", err => { clearTimeout(guard); fail(err && err.type === "peer-unavailable" ? "Гри з таким PIN немає." : "Помилка з'єднання. Спробуй ще раз."); });
+  pPeer.on("open", () => {
+    pConn = pPeer.connect(PREFIX + pin, { reliable: true });
+    pConn.on("open", () => { clearTimeout(guard); pConn.send({ type:"join", name }); });
+    pConn.on("data", onHostMsg);
+    pConn.on("close", () => { $("pErr").textContent = "З'єднання з грою втрачено."; });
+  });
+}
+function pShow(part){ ["pWait","pQ","pSent","pRes","pEnd"].forEach(p => $(p).hidden = p !== part); }
+function onHostMsg(m){
+  if(m.type === "rejected"){ $("joinErr").textContent = m.reason; $("joinBtn").disabled=false; $("joinBtn").textContent="Hrať!"; try{pConn.close();}catch(e){} return; }
+  if(m.type === "welcome"){ pState.score = m.score || 0; $("pName").textContent = pState.name; $("pScore").textContent = pState.score+" b."; show("pGame"); pShow("pWait"); $("pErr").textContent=""; return; }
+  if(m.type === "question"){
+    pState.qIdx = m.idx; clearInterval(pState.timer);
+    $("pCounter").textContent = "Otázka "+(m.idx+1)+" / "+m.total;
+    $("pQText").textContent = m.text;
+    const box = $("pAnswers"); box.innerHTML = "";
+    m.options.forEach((o,k) => {
+      const b = el("button","p-btn a"+k); b.append(el("span","sym",SYMS[k]), el("span",null,o));
+      b.onclick = () => { if(pState.answered) return; pState.answered = true; pConn.send({ type:"answer", idx:m.idx, choice:k }); pShow("pSent"); };
+      box.appendChild(b);
+    });
+    pState.answered = false;
+    let left = m.time; $("pTime").textContent = left+" s";
+    pState.timer = setInterval(() => { left--; $("pTime").textContent = Math.max(left,0)+" s"; if(left<=0){ clearInterval(pState.timer); if(!pState.answered){ [...box.children].forEach(b=>b.disabled=true); } } }, 1000);
+    pShow("pQ"); return;
+  }
+  if(m.type === "result"){
+    clearInterval(pState.timer);
+    pState.score = m.score; $("pScore").textContent = m.score+" b.";
+    const r = $("pRes"); r.classList.toggle("good", m.correct); r.classList.toggle("bad", !m.correct);
+    $("pResIcon").textContent = m.correct ? "✅" : (m.answered ? "❌" : "⌛");
+    $("pResTitle").textContent = m.correct ? "Správne!" : (m.answered ? "Nesprávne" : "Čas vypršal");
+    $("pResPts").textContent = "+"+m.gained;
+    $("pResText").textContent = (m.correct ? "" : "Správne: "+m.correctText+". ") + "Ти на "+m.rank+". місці з "+m.of+".";
+    pShow("pRes"); return;
+  }
+  if(m.type === "end"){
+    $("pEndRank").textContent = m.rank+". miesto";
+    $("pEndText").textContent = m.score+" bodov · правильно "+m.right+" з "+m.total;
+    pShow("pEnd"); return;
+  }
+}
+
+/* ============ HOST ============ */
+let H = null;
+function fillLessons(){
+  const L = BOOKS[$("bookSel").value];
+  $("lessonSel").innerHTML = "";
+  L.forEach((l,i) => { const o = el("option", null, "Lekcia "+l.n+": "+l.title); o.value = i; $("lessonSel").appendChild(o); });
+  fillTests();
+}
+function fillTests(){
+  const l = BOOKS[$("bookSel").value][+$("lessonSel").value];
+  $("testSel").innerHTML = "";
+  l.tests.forEach((t,i) => { const o = el("option", null, "Test "+(i+1)+": "+t.title+" ("+t.q.length+")"); o.value = i; $("testSel").appendChild(o); });
+}
+$("bookSel").onchange = fillLessons;
+$("lessonSel").onchange = fillTests;
+$("createBtn").onclick = () => createGame(0);
+
+function createGame(attempt){
+  $("hostErr").textContent = "";
+  if(typeof Peer === "undefined"){ $("hostErr").textContent = "Не вдалося завантажити гру. Перевірте інтернет."; return; }
+  const book = $("bookSel").value, li = +$("lessonSel").value, ti = +$("testSel").value;
+  const lesson = BOOKS[book][li], test = lesson.tests[ti];
+  const pin = String(Math.floor(100000 + Math.random()*900000));
+  $("createBtn").disabled = true; $("createBtn").textContent = "Vytváram…";
+  const peer = new Peer(PREFIX + pin, PEER_CFG);
+  peer.on("error", err => {
+    if(err && err.type === "unavailable-id" && attempt < 4){ try{peer.destroy();}catch(e){} createGame(attempt+1); return; }
+    if(H && H.peer === peer && H.phase !== "setup") return;
+    $("hostErr").textContent = "Помилка з'єднання: " + (err && err.type || "") + ". Спробуйте ще раз.";
+    $("createBtn").disabled = false; $("createBtn").textContent = "Vytvoriť hru";
+  });
+  peer.on("open", () => {
+    H = { peer, pin, book, lesson, test, time: +$("timeSel").value, players: new Map(), phase: "lobby",
+          qs: shuffle(test.q.map(([q,opts,ex]) => { const order = shuffle([0,1,2,3]); return { q, opts: order.map(i=>opts[i]), correct: order.indexOf(0), ex }; })),
+          qi: -1, answers: new Map(), qStart: 0, timer: null };
+    $("createBtn").disabled = false; $("createBtn").textContent = "Vytvoriť hru";
+    $("lobbyTitle").textContent = book+" · Lekcia "+lesson.n+" · "+test.title;
+    $("bigPin").textContent = pin;
+    const url = baseUrl() + "?pin=" + pin;
+    $("joinUrl").textContent = url;
+    $("qr").innerHTML = "";
+    const isLocal = location.protocol === "file:" || location.hostname === "localhost" || location.hostname === "" || /^127\./.test(location.hostname);
+    $("localWarn").hidden = !isLocal;
+    if(isLocal){
+      $("localWarn").textContent = "Гра відкрита з файлу на вашому комп'ютері, тому телефони не зможуть відкрити QR-код. Розмістіть папку на Netlify і відкрийте гру за посиланням https://….netlify.app.";
+      $("qr").hidden = true;
+    } else {
+      $("qr").hidden = false;
+      try {
+        const qr = qrcode(0, "M"); qr.addData(url); qr.make();
+        const img = new Image(); img.alt = "QR kód pre pripojenie"; img.src = qr.createDataURL(8, 4);
+        $("qr").appendChild(img);
+      } catch(e){ $("qr").hidden = true; }
+    }
+    renderChips(); show("hLobby");
+  });
+  peer.on("connection", conn => {
+    conn.on("data", m => onPlayerMsg(conn, m));
+    conn.on("close", () => { if(!H) return; for(const p of H.players.values()) if(p.conn === conn){ p.online = false; } renderChips(); updateAnswered(); });
+  });
+}
+function renderChips(){
+  const box = $("playerChips"); box.innerHTML = "";
+  const list = [...H.players.values()];
+  list.forEach(p => box.appendChild(el("span", "chip" + (p.online ? "" : " off"), p.name)));
+  $("pCount").textContent = list.filter(p=>p.online).length;
+  $("startBtn").disabled = list.filter(p=>p.online).length === 0;
+}
+function onPlayerMsg(conn, m){
+  if(!H) return;
+  if(m.type === "join"){
+    const name = String(m.name || "").trim().slice(0,24);
+    if(!name){ conn.send({type:"rejected", reason:"Введи ім'я."}); return; }
+    const key = name.toLowerCase();
+    let p = H.players.get(key);
+    if(p && p.online && p.conn !== conn){ conn.send({type:"rejected", reason:"Це ім'я вже зайняте. Додай першу літеру прізвища."}); return; }
+    if(H.phase === "end"){ conn.send({type:"rejected", reason:"Гра вже закінчилася."}); return; }
+    if(!p){ p = { name, score:0, right:0, streak:0, log:[] }; H.players.set(key, p); }
+    p.conn = conn; p.online = true;
+    conn.send({ type:"welcome", score: p.score });
+    if(H.phase === "question" && !H.answers.has(key)) sendQuestion(p);
+    renderChips(); updateAnswered(); return;
+  }
+  if(m.type === "answer"){
+    if(H.phase !== "question" || m.idx !== H.qi) return;
+    const key = [...H.players.entries()].find(([k,p]) => p.conn === conn)?.[0];
+    if(!key || H.answers.has(key)) return;
+    H.answers.set(key, { choice: +m.choice, ms: Date.now() - H.qStart });
+    updateAnswered();
+    const online = [...H.players.values()].filter(p=>p.online).length;
+    if(H.answers.size >= online) reveal();
+  }
+}
+function sendQuestion(p){
+  const item = H.qs[H.qi];
+  const left = Math.max(1, Math.ceil(H.time - (Date.now()-H.qStart)/1000));
+  try { p.conn.send({ type:"question", idx:H.qi, total:H.qs.length, text:item.q, options:item.opts, time:left }); } catch(e){}
+}
+function broadcast(fn){ for(const p of H.players.values()) if(p.online && p.conn && p.conn.open){ try{ p.conn.send(fn(p)); }catch(e){} } }
+
+$("startBtn").onclick = nextQuestion;
+$("hNext").onclick = () => { if(H.phase === "question") reveal(); else if(H.qi < H.qs.length-1) nextQuestion(); else endGame(); };
+
+function nextQuestion(){
+  H.qi++; H.phase = "question"; H.answers = new Map(); H.qStart = Date.now();
+  const item = H.qs[H.qi];
+  $("hCounter").textContent = "Otázka "+(H.qi+1)+" / "+H.qs.length;
+  $("hQText").textContent = item.q;
+  const tiles = $("hTiles"); tiles.innerHTML = "";
+  item.opts.forEach((o,k) => { const t = el("div","tile a"+k); t.append(el("span","sym",SYMS[k]), el("span",null,o), el("span","cnt","")); tiles.appendChild(t); });
+  $("hReveal").hidden = true; $("hNext").textContent = "Ukázať odpoveď"; $("hHint").textContent = "";
+  for(const p of H.players.values()) if(p.online) sendQuestion(p);
+  let left = H.time; $("hTimer").textContent = left;
+  clearInterval(H.timer);
+  H.timer = setInterval(() => { left--; $("hTimer").textContent = Math.max(left,0); if(left <= 0) reveal(); }, 1000);
+  updateAnswered(); show("hQ");
+}
+function updateAnswered(){
+  if(!H || H.phase !== "question") return;
+  const online = [...H.players.values()].filter(p=>p.online).length;
+  $("hAnswered").textContent = "Odpovede: "+H.answers.size+" / "+online;
+}
+function ranking(){ return [...H.players.values()].sort((a,b) => b.score - a.score || a.name.localeCompare(b.name)); }
+function reveal(){
+  if(H.phase !== "question") return;
+  clearInterval(H.timer); H.phase = "reveal";
+  const item = H.qs[H.qi], counts = [0,0,0,0];
+  for(const [key,p] of H.players){
+    const a = H.answers.get(key);
+    let gained = 0, correct = false;
+    if(a){ counts[a.choice]++; correct = a.choice === item.correct;
+      if(correct){ p.streak++; p.right++; gained = Math.round(500 + 500*Math.max(0, 1 - a.ms/(H.time*1000))) + Math.min(p.streak-1,3)*50; }
+      else p.streak = 0;
+    } else p.streak = 0;
+    p.score += gained; p.last = { gained, correct, answered: !!a };
+    p.log[H.qi] = a ? item.opts[a.choice] : "—";
+  }
+  [...$("hTiles").children].forEach((t,k) => { t.classList.add(k === item.correct ? "right" : "dim"); t.querySelector(".cnt").textContent = counts[k]; });
+  $("hExpl").textContent = "✅ " + item.opts[item.correct] + " — " + item.ex;
+  const rank = ranking(), board = $("hBoard"); board.innerHTML = "";
+  rank.slice(0,5).forEach(p => { const li = el("li"); li.append(el("span",null,p.name), el("span",null,String(p.score))); board.appendChild(li); });
+  $("hReveal").hidden = false;
+  $("hNext").textContent = H.qi < H.qs.length-1 ? "Ďalšia otázka ▶" : "Výsledky 🏁";
+  broadcast(p => ({ type:"result", correct:p.last.correct, answered:p.last.answered, gained:p.last.gained, score:p.score,
+                    rank: rank.indexOf(p)+1, of: rank.length, correctText: item.opts[item.correct] }));
+}
+function endGame(){
+  H.phase = "end";
+  const rank = ranking(), n = H.qs.length;
+  $("endTitle").textContent = H.book+" · Lekcia "+H.lesson.n+" · "+H.test.title+" · "+new Date().toLocaleDateString("uk-UA");
+  const pod = $("podium"); pod.innerHTML = "";
+  const order = [1,0,2], heights = [150,200,110], colors = ["var(--teal)","var(--blue)","var(--red)"];
+  order.forEach(i => { const p = rank[i]; if(!p) return;
+    const d = el("div","pod"); d.append(el("div","nm",p.name), el("div","pt",p.score+" b."));
+    const bar = el("div","bar",String(i+1)); bar.style.height = heights[order.indexOf(i)]+"px"; bar.style.background = colors[order.indexOf(i)];
+    d.appendChild(bar); pod.appendChild(d); });
+  const tb = $("resBody"); tb.innerHTML = "";
+  rank.forEach((p,i) => { const tr = el("tr"); [i+1, p.name, p.score, p.right+" / "+n, Math.round(p.right/n*100)+" %"].forEach(v => tr.appendChild(el("td",null,String(v)))); tb.appendChild(tr); });
+  broadcast(p => ({ type:"end", rank: rank.indexOf(p)+1, score:p.score, right:p.right, total:n }));
+  show("hEnd");
+}
+function resultsRows(){
+  const n = H.qs.length;
+  const head = ["Poradie","Meno","Body","Správne","Percento"].concat(H.qs.map((q,i)=>"Otázka "+(i+1)));
+  const rows = ranking().map((p,i) => [i+1, p.name, p.score, p.right+"/"+n, Math.round(p.right/n*100)+"%"].concat(H.qs.map((q,qi)=>p.log[qi]||"—")));
+  return [head].concat(rows);
+}
+$("csvBtn").onclick = () => {
+  const csv = resultsRows().map(r => r.map(v => '"'+String(v).replace(/"/g,'""')+'"').join(";")).join("\n");
+  const blob = new Blob(["\ufeff"+csv], { type:"text/csv;charset=utf-8" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = "vysledky_"+H.book+"_lekcia"+H.lesson.n+"_test"+(H.lesson.tests.indexOf(H.test)+1)+".csv";
+  document.body.appendChild(a); a.click(); a.remove();
+};
+$("copyBtn").onclick = async () => {
+  const txt = resultsRows().map(r => r.slice(0,5).join("\t")).join("\n");
+  try { await navigator.clipboard.writeText(txt); $("copyBtn").textContent = "Skopírované ✓"; } catch(e){ $("copyBtn").textContent = "Nepodarilo sa skopírovať"; }
+  setTimeout(() => $("copyBtn").textContent = "Kopírovať výsledky", 2500);
+};
+$("newGame").onclick = () => { try{ H.peer.destroy(); }catch(e){} H = null; fillLessons(); show("hSetup"); };
+window.addEventListener("beforeunload", e => { if(H && H.phase !== "end" && H.players.size){ e.preventDefault(); e.returnValue = ""; } });
+
+/* ============ START ============ */
+(function init(){
+  const pin = new URLSearchParams(location.search).get("pin");
+  if(pin && /^\d{6}$/.test(pin)){ $("pinIn").value = pin; show("pJoin"); setTimeout(()=>$("nameIn").focus(), 50); }
+  else show("home");
+})();
+</script>
+</body>
+</html>
